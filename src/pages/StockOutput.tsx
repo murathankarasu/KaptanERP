@@ -1,0 +1,414 @@
+import { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
+import { addStockOutput, getStockOutputs, StockOutput as StockOutputType, getAllStockStatus } from '../services/stockService';
+import { exportStockOutputsToExcel } from '../utils/excelExport';
+import { useNavigate } from 'react-router-dom';
+import { Download, Plus, X, FileSignature } from 'lucide-react';
+
+export default function StockOutput() {
+  const [outputs, setOutputs] = useState<StockOutputType[]>([]);
+  const [stockStatus, setStockStatus] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [filters, setFilters] = useState({
+    employee: '',
+    department: '',
+    materialName: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  const [formData, setFormData] = useState({
+    issueDate: new Date().toISOString().split('T')[0],
+    employee: '',
+    department: '',
+    materialName: '',
+    quantity: '',
+    issuedBy: '',
+    description: ''
+  });
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadData();
+  }, [filters]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const filterParams: any = {};
+      
+      if (filters.employee) filterParams.employee = filters.employee;
+      if (filters.department) filterParams.department = filters.department;
+      if (filters.materialName) filterParams.materialName = filters.materialName;
+      if (filters.startDate) filterParams.startDate = new Date(filters.startDate);
+      if (filters.endDate) filterParams.endDate = new Date(filters.endDate);
+
+      const [outputsData, statusData] = await Promise.all([
+        getStockOutputs(filterParams),
+        getAllStockStatus()
+      ]);
+      
+      setOutputs(outputsData);
+      setStockStatus(statusData);
+    } catch (error) {
+      console.error('Veriler yüklenirken hata:', error);
+      alert('Veriler yüklenirken bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Sayısal alan validasyonu
+    const quantity = parseFloat(formData.quantity);
+    
+    if (isNaN(quantity) || quantity <= 0) {
+      alert('Verilen Miktar geçerli bir sayı olmalı ve 0\'dan büyük olmalıdır');
+      return;
+    }
+    
+    if (quantity > maxQuantity) {
+      alert(`Verilen miktar mevcut stoktan fazla olamaz. Maksimum: ${maxQuantity} ${selectedMaterial?.unit}`);
+      return;
+    }
+    
+    try {
+      const output: StockOutputType = {
+        issueDate: new Date(formData.issueDate),
+        employee: formData.employee,
+        department: formData.department,
+        materialName: formData.materialName,
+        quantity: quantity,
+        issuedBy: formData.issuedBy,
+        description: formData.description
+      };
+
+      const outputId = await addStockOutput(output);
+      
+      alert('Personel çıkışı başarıyla eklendi!');
+      setShowForm(false);
+      setFormData({
+        issueDate: new Date().toISOString().split('T')[0],
+        employee: '',
+        department: '',
+        materialName: '',
+        quantity: '',
+        issuedBy: '',
+        description: ''
+      });
+      loadData();
+      
+      // Zimmet imza sayfasına yönlendir
+      navigate(`/zimmet-signature/${outputId}`);
+    } catch (error: any) {
+      alert('Hata: ' + (error.message || 'Personel çıkışı eklenirken bir hata oluştu'));
+    }
+  };
+
+  const handleExport = () => {
+    exportStockOutputsToExcel(outputs, `personel_cikislari_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      employee: '',
+      department: '',
+      materialName: '',
+      startDate: '',
+      endDate: ''
+    });
+  };
+
+  const availableMaterials = stockStatus.filter(s => s.currentStock > 0);
+  const uniqueEmployees = Array.from(new Set(outputs.map(o => o.employee))).filter(Boolean);
+  const uniqueDepartments = Array.from(new Set(outputs.map(o => o.department))).filter(Boolean);
+  const uniqueMaterials = Array.from(new Set(outputs.map(o => o.materialName))).filter(Boolean);
+
+  const selectedMaterial = stockStatus.find(s => s.materialName === formData.materialName);
+  const maxQuantity = selectedMaterial?.currentStock || 0;
+
+  return (
+    <Layout>
+      <div style={{ padding: '30px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h1 style={{ fontSize: '36px', fontWeight: '700', color: '#000', letterSpacing: '-1px' }}>
+            Personel Çıkış Takip
+          </h1>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleExport} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Download size={18} />
+              Excel'e Aktar
+            </button>
+            <button onClick={() => setShowForm(!showForm)} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={18} />
+              Yeni Çıkış
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        {showForm && (
+          <div className="excel-form" style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#000', letterSpacing: '0.3px', textTransform: 'uppercase' }}>Yeni Personel Çıkışı</h2>
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={24} color="#7f8c8d" />
+              </button>
+            </div>
+            {availableMaterials.length === 0 && (
+              <div style={{ 
+                background: '#fff3cd', 
+                color: '#856404', 
+                padding: '12px', 
+                borderRadius: '4px', 
+                marginBottom: '20px',
+                fontSize: '14px'
+              }}>
+                ⚠️ Stokta hiç malzeme bulunmamaktadır. Önce stok girişi yapmalısınız.
+              </div>
+            )}
+            <form onSubmit={handleSubmit}>
+              <div className="grid-3">
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Veriliş Tarihi *</label>
+                  <input
+                    type="date"
+                    className="excel-form-input"
+                    value={formData.issueDate}
+                    onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Personel *</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.employee}
+                    onChange={(e) => setFormData({ ...formData, employee: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Departman *</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Malzeme Adı *</label>
+                  <select
+                    className="excel-form-select"
+                    value={formData.materialName}
+                    onChange={(e) => setFormData({ ...formData, materialName: e.target.value })}
+                    required
+                    disabled={availableMaterials.length === 0}
+                  >
+                    <option value="">Seçiniz</option>
+                    {availableMaterials.map(m => (
+                      <option key={m.materialName} value={m.materialName}>
+                        {m.materialName} (Mevcut: {m.currentStock} {m.unit})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedMaterial && (
+                    <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '4px' }}>
+                      Mevcut stok: {selectedMaterial.currentStock} {selectedMaterial.unit}
+                    </div>
+                  )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Verilen Miktar *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={maxQuantity}
+                    className="excel-form-input"
+                    value={formData.quantity}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Sadece sayı ve ondalık nokta kabul et
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setFormData({ ...formData, quantity: value });
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (isNaN(value) || value <= 0) {
+                        e.target.setCustomValidity('Geçerli bir sayı giriniz (0\'dan büyük)');
+                      } else if (value > maxQuantity) {
+                        e.target.setCustomValidity(`Maksimum: ${maxQuantity} ${selectedMaterial?.unit}`);
+                      } else {
+                        e.target.setCustomValidity('');
+                      }
+                    }}
+                    required
+                    disabled={!formData.materialName}
+                  />
+                  {formData.materialName && maxQuantity > 0 && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '4px', fontWeight: '500' }}>
+                      Maksimum: {maxQuantity} {selectedMaterial?.unit}
+                    </div>
+                  )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Teslim Eden *</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.issuedBy}
+                    onChange={(e) => setFormData({ ...formData, issuedBy: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="excel-form-group">
+                <label className="excel-form-label">Açıklama</label>
+                <textarea
+                  className="excel-form-input"
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button type="submit" className="btn btn-primary" disabled={availableMaterials.length === 0}>
+                  Kaydet ve İmza Sayfasına Git
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>İptal</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Filtreler */}
+        <div className="filter-section">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#000', letterSpacing: '0.5px', textTransform: 'uppercase' }}>Filtrele</h3>
+            <button onClick={clearFilters} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>
+              Filtreleri Temizle
+            </button>
+          </div>
+          <div className="filter-row">
+            <div className="filter-group">
+              <label className="excel-form-label">Personel</label>
+              <select
+                className="excel-form-select"
+                value={filters.employee}
+                onChange={(e) => setFilters({ ...filters, employee: e.target.value })}
+              >
+                <option value="">Tümü</option>
+                {uniqueEmployees.map(e => (
+                  <option key={e} value={e}>{e}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="excel-form-label">Departman</label>
+              <select
+                className="excel-form-select"
+                value={filters.department}
+                onChange={(e) => setFilters({ ...filters, department: e.target.value })}
+              >
+                <option value="">Tümü</option>
+                {uniqueDepartments.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="excel-form-label">Malzeme Adı</label>
+              <select
+                className="excel-form-select"
+                value={filters.materialName}
+                onChange={(e) => setFilters({ ...filters, materialName: e.target.value })}
+              >
+                <option value="">Tümü</option>
+                {uniqueMaterials.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="excel-form-label">Başlangıç Tarihi</label>
+              <input
+                type="date"
+                className="excel-form-input"
+                value={filters.startDate}
+                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              />
+            </div>
+            <div className="filter-group">
+              <label className="excel-form-label">Bitiş Tarihi</label>
+              <input
+                type="date"
+                className="excel-form-input"
+                value={filters.endDate}
+                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Tablo */}
+        <div className="table-container">
+          {loading ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>Yükleniyor...</div>
+          ) : outputs.length === 0 ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+              Henüz personel çıkışı kaydı bulunmamaktadır.
+            </div>
+          ) : (
+            <table className="excel-table">
+              <thead>
+                <tr>
+                  <th>Veriliş Tarihi</th>
+                  <th>Personel</th>
+                  <th>Departman</th>
+                  <th>Malzeme Adı</th>
+                  <th>Verilen Miktar</th>
+                  <th>Teslim Eden</th>
+                  <th>Açıklama</th>
+                  <th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outputs.map((output) => (
+                  <tr key={output.id}>
+                    <td>{output.issueDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{output.employee}</td>
+                    <td>{output.department}</td>
+                    <td>{output.materialName}</td>
+                    <td>{output.quantity}</td>
+                    <td>{output.issuedBy}</td>
+                    <td>{output.description || '-'}</td>
+                    <td>
+                      <button
+                        onClick={() => navigate(`/zimmet-signature/${output.id}`)}
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 8px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <FileSignature size={14} />
+                        İmza
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
+
