@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { Shipment, ShipmentItem } from '../services/shipmentService';
+import { Shipment } from '../services/shipmentService';
 import { Customer } from '../services/customerService';
 
 /**
@@ -77,7 +77,6 @@ export const generateShipmentPDF = async (
   yPos += 10;
 
   // Tablo başlıkları
-  const tableStartY = yPos;
   const docCurrency = shipment.currency || 'TRY';
 
   const colWidths = {

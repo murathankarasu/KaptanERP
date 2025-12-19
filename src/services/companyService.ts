@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc, Timestamp, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, doc, updateDoc, deleteDoc, Timestamp, where, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export interface Company {

@@ -4,7 +4,7 @@ import { getActivityLogs, ActivityLog } from '../services/activityLogService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { PERMISSIONS } from '../types/permissions';
-import { Activity, Filter, Calendar } from 'lucide-react';
+import { Activity } from 'lucide-react';
 
 export default function ActivityLogs() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);

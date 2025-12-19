@@ -8,8 +8,7 @@ import {
   Timestamp,
   doc,
   updateDoc,
-  deleteDoc,
-  getDoc
+  deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { addPersonnel, getPersonnelByEmail } from './personnelService';

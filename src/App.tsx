@@ -38,6 +38,7 @@ import SettingsPage from './pages/Settings';
 import SalesInvoices from './pages/SalesInvoices';
 import Signup from './pages/Signup';
 import InviteAdmin from './pages/InviteAdmin';
+import About from './pages/About';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -109,6 +110,10 @@ function App() {
         <Route
           path="/invite-admin"
           element={isAuthenticated() ? <InviteAdmin /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/about"
+          element={isAuthenticated() ? <About /> : <Navigate to="/login" />}
         />
         <Route 
           path="/dashboard" 

@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { getUsers, addUser, updateUser, deleteUser, User } from '../services/userService';
 import { getErrorLogs, resolveErrorLog, ErrorLog } from '../services/userService';
-import { getCompanies, addCompany, Company, getCompanyByCode } from '../services/companyService';
-import { addInviteCode, getInviteCodes, InviteCode } from '../services/inviteService';
-import { generateCompanyCode } from '../utils/generateCompanyCode';
-import { Plus, X, Edit, Save, Shield, AlertTriangle, CheckCircle, Users } from 'lucide-react';
+import { getCompanies, Company, getCompanyByCode } from '../services/companyService';
+import { getInviteCodes, InviteCode } from '../services/inviteService';
+import { Plus, X, Edit, Save, Shield, CheckCircle } from 'lucide-react';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -14,7 +13,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<User[]>([]);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [invites, setInvites] = useState<InviteCode[]>([]);
+  const [, setInvites] = useState<InviteCode[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [showUserForm, setShowUserForm] = useState(false);
@@ -33,11 +32,6 @@ export default function AdminPanel() {
     isActive: true
   });
 
-  const [inviteForm, setInviteForm] = useState({
-    code: '',
-    companyId: '',
-    role: 'manager' as 'manager' | 'user'
-  });
 
   useEffect(() => {
     // Admin kontrolü
@@ -142,18 +136,30 @@ export default function AdminPanel() {
       targetCompanyCode = company.code || '';
       targetCompanyName = company.name || '';
 
-      const userData = {
-        ...userFormData,
-        companyId: targetCompanyId,
-        companyCode: targetCompanyCode,
-        companyName: targetCompanyName,
-        password: userFormData.password || undefined
-      };
-
       if (editingUserId) {
-        await updateUser(editingUserId, userData);
+        const updateData: any = {
+          ...userFormData,
+          companyId: targetCompanyId,
+          companyCode: targetCompanyCode,
+          companyName: targetCompanyName
+        };
+        if (userFormData.password) {
+          updateData.password = userFormData.password;
+        }
+        await updateUser(editingUserId, updateData);
         alert('Kullanıcı başarıyla güncellendi!');
       } else {
+        if (!userFormData.password) {
+          alert('Yeni kullanıcı için şifre zorunludur');
+          return;
+        }
+        const userData = {
+          ...userFormData,
+          companyId: targetCompanyId,
+          companyCode: targetCompanyCode,
+          companyName: targetCompanyName,
+          password: userFormData.password
+        };
         await addUser(userData);
         alert('Kullanıcı başarıyla eklendi!');
       }

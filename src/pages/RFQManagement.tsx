@@ -94,6 +94,19 @@ export default function RFQManagement() {
     }
   };
 
+  const handleEdit = (rfq: RFQ) => {
+    setEditingId(rfq.id || null);
+    setForm({
+      rfqNumber: rfq.rfqNumber,
+      dueDate: rfq.dueDate.toISOString().split('T')[0],
+      suppliers: (rfq.suppliers || []).join(', '),
+      baseReqId: '',
+      items: rfq.items,
+      status: rfq.status
+    });
+    setShowForm(true);
+  };
+
   const closeRFQ = async (id: string) => {
     await updateRFQ(id, { status: 'closed' });
     loadData();

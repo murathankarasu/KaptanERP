@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { getActivityLogs, ActivityLog } from '../services/activityLogService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
-import { getCurrentUser } from '../utils/getCurrentUser';
 import { PERMISSIONS } from '../types/permissions';
-import { FileText, Filter, Calendar, User, Activity } from 'lucide-react';
+import { FileText, User, Activity, Calendar } from 'lucide-react';
 
 export default function TransactionOrders() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
@@ -17,7 +16,6 @@ export default function TransactionOrders() {
   });
   const [users, setUsers] = useState<{ id: string; username: string; email?: string }[]>([]);
 
-  const currentUser = getCurrentUser();
   const currentCompany = getCurrentCompany();
 
   useEffect(() => {

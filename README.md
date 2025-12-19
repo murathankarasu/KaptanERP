@@ -1,143 +1,78 @@
-# Kaptan - Kolay ERP Sistemleri
+# Kaptan - Advanced Business Management System
 
-Firestore tabanlı ERP uygulaması. Siyah-beyaz minimalist tasarım ile stok giriş, personel çıkış takibi ve zimmet imza yönetimi.
+A comprehensive, multi-tenant Business Management System built with React, Vite, and Firebase (Firestore). Designed with a minimalist black-and-white UI, Kaptan provides modular solutions for SCM, CRM, Finance, Production, and HR.
 
-## Özellikler
+## 🚀 Key Features
 
-- 🔐 Google Authentication ile güvenli giriş (izin verilen hesaplar)
-- 📊 Excel benzeri tablo arayüzü
-- 📥 Excel formatında veri dışa aktarma
-- 📦 Stok Giriş Takibi (filtreleme ile)
-- 👥 Personel Çıkış Takibi (otomatik stok düşme)
-- 📈 Stok Durumu (otomatik hesaplama, renkli durum göstergesi)
-- ✍️ Zimmet İmza Sayfası (A4 formatında yazdırılabilir)
+### 📦 Supply Chain & Inventory (SCM)
+- **Stock Tracking:** Real-time entry/output tracking with SKU, serial/lot, and expiry date support.
+- **WMS:** Bin locations management for optimized warehouse organization.
+- **Procurement:** Full cycle from Requisition -> RFQ -> Purchase Order -> Goods Receipt (GRN).
+- **Unit Conversions:** Automatic conversion between base units and sale/purchase units.
 
-## Kurulum
+### 🤝 Sales & Customer Relations (CRM)
+- **Customer Management:** Comprehensive profiles with credit limits, balance tracking, and groups.
+- **Order-to-Cash:** Integrated flow for Quotes -> Orders -> Shipments -> Invoices.
+- **Price Rules:** Automated pricing based on customer groups, quantities, and date ranges.
+- **Customer Insights:** AI-powered analysis of top products, payment habits, and churn risk.
 
-1. Bağımlılıkları yükleyin:
+### 💰 Financial Management
+- **General Ledger:** Multi-currency journal entries with automated exchange rate conversion.
+- **AP/AR:** Automated tracking of accounts payable and receivable.
+- **e-Transformation:** Local generation of UBL-TR XML and PDF for e-Invoice, e-Archive, and e-Waybill.
+- **Aging Reports:** Detailed customer balance aging for cash flow management.
+
+### 🏭 Production Management (MRP & MES)
+- **BOM:** Multi-level Bill of Materials management.
+- **MRP:** Automated material requirements planning based on orders and current stock.
+- **Shop Floor Control:** Real-time production order tracking, workstation logs, and duration reports.
+
+### 👥 Human Resources (HRM)
+- **Personnel Management:** Automated personnel card creation for new users.
+- **Leave Management:** Digital request and approval workflow for employee leave.
+- **Payroll Calculator:** Turkish regulation compliant payroll calculations (Gross to Net).
+
+### 🤖 AI Capabilities
+- **Smart Reconciliation:** ML-powered bank statement matching.
+- **Forecasting:** Cash flow and demand forecasting using historical data.
+- **Sales Assistant:** Generative AI for follow-up emails and customer engagement.
+- **Autonomous Reporting:** Chat with your data using natural language.
+
+## 🛠 Technical Stack
+- **Frontend:** React 18, TypeScript, Vite
+- **Backend:** Firebase Firestore (Multi-tenant architecture)
+- **Authentication:** Firebase Auth (Google & Password-based)
+- **Visualization:** Recharts for analytics dashboards
+- **Reporting:** Excel (XLSX) and PDF (jsPDF) export capabilities
+- **AI Engine:** OpenAI GPT-4o Mini for intelligent processing
+
+## ⚙️ Configuration
+
+1. Clone the repository and install dependencies:
 ```bash
 npm install
 ```
 
-2. Firebase yapılandırması:
-   - Firebase Console'dan yeni bir proje oluşturun
-   - Authentication'da Google provider'ı etkinleştirin
-   - Firestore Database'i oluşturun
-   - `.env` dosyası oluşturun ve Firebase bilgilerinizi ekleyin:
-
+2. Create a `.env` file in the root directory:
 ```env
-VITE_FIREBASE_API_KEY=your_api_key
-VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-VITE_FIREBASE_PROJECT_ID=your_project_id
-VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-VITE_FIREBASE_APP_ID=your_app_id
-VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
 VITE_ADMIN_USERNAME=admin
-VITE_ADMIN_PASSWORD=admin123
-VITE_OPENAI_API_KEY=your_openai_api_key (veya VITE_GPT_API_KEY)
+VITE_ADMIN_PASSWORD=...
+VITE_OPENAI_API_KEY=...
 ```
 
-3. Firestore'da izin verilen kullanıcıları ayarlayın:
-   - Firestore'da `settings` koleksiyonu oluşturun
-   - `allowedUsers` dokümanı oluşturun
-   - `emails` alanına izin verilen email adreslerini array olarak ekleyin:
-   ```json
-   {
-     "emails": ["user1@example.com", "user2@example.com"]
-   }
-   ```
-
-4. Uygulamayı çalıştırın:
+3. Run in development mode:
 ```bash
 npm run dev
 ```
 
-## Kullanım
+## 🔒 Security & Multi-tenancy
+Kaptan uses a strict `companyId` filtering mechanism across all services, ensuring data isolation for each registered firm. User roles (Admin, Manager, User) and granular permissions control access to specific modules.
 
-### Stok Giriş Takip
-- Fabrikaya gelen stok malzemelerin girişi yapılır
-- Filtreleme: Malzeme adı, kategori, tedarikçi, tarih aralığı
-- Excel'e aktarma özelliği
-
-### Personel Çıkış Takip
-- Personellere malzeme çıkışı yapılır
-- Stokta olmayan malzeme çıkışına izin verilmez
-- Çıkış yapıldığında stok otomatik düşer
-- Çıkış sonrası otomatik olarak zimmet imza sayfasına yönlendirilir
-
-### Stok Durumu
-- Otomatik hesaplanır (veri girişi yok)
-- Durum renkleri:
-  - 🟢 Yeşil: Kritik seviyenin üstünde
-  - 🟠 Turuncu: Kritik seviyeye yaklaşıyor
-  - 🔴 Kırmızı: Kritik seviyenin altında veya sıfır
-
-### Zimmet İmza Sayfası
-- A4 formatında yazdırılabilir
-- Personel ve yetkili imzaları dijital olarak alınır
-- İade tarihi belirlenebilir
-- Firestore'da saklanır
-
-## Vercel'de Deploy
-
-1. **Vercel hesabı oluşturun** ve projeyi GitHub'a push edin
-
-2. **Vercel Dashboard'dan projeyi import edin:**
-   - "New Project" butonuna tıklayın
-   - GitHub repository'nizi seçin
-   - Framework Preset: **Vite** seçin
-   - Root Directory: `.` (proje kök dizini)
-
-3. **Environment Variables ekleyin:**
-   Vercel Dashboard > Settings > Environment Variables bölümünden şu değişkenleri ekleyin:
-   
-   ```
-   VITE_FIREBASE_API_KEY=your_api_key
-   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
-   VITE_FIREBASE_PROJECT_ID=your_project_id
-   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
-   VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
-   VITE_FIREBASE_APP_ID=your_app_id
-   VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
-   VITE_OPENAI_API_KEY=your_openai_api_key (veya VITE_GPT_API_KEY)
-   ```
-
-4. **Deploy:**
-   - "Deploy" butonuna tıklayın
-   - Build otomatik olarak başlayacak
-   - Deploy tamamlandıktan sonra URL'niz hazır olacak
-
-5. **Firebase Hosting Domain'i ekleyin (opsiyonel):**
-   - Firebase Console > Hosting
-   - Vercel domain'inizi ekleyin
-   - Firebase Authentication'da authorized domains'e ekleyin
-
-### Vercel CLI ile Deploy (Alternatif)
-
-```bash
-# Vercel CLI'yı global olarak yükleyin
-npm i -g vercel
-
-# Proje dizininde
-vercel
-
-# Production deploy için
-vercel --prod
-```
-
-## Teknolojiler
-
-- React + TypeScript
-- Firebase (Authentication + Firestore)
-- Vite
-- React Router
-- Recharts (grafikler)
-- XLSX (Excel export)
-- React Signature Canvas (imza)
-- OpenAI API (AI özellikleri)
-
-## Lisans
-
+## 📄 License
 MIT
-

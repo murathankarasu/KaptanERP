@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { addPersonnel, getPersonnel, updatePersonnel, deletePersonnel, Personnel } from '../services/personnelService';
-import { getUsers, ensurePersonnelForUser, User } from '../services/userService';
+import { ensurePersonnelForUser, User } from '../services/userService';
 import { addErrorLog } from '../services/userService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { PERMISSIONS, PERMISSION_GROUPS, PermissionType } from '../types/permissions';
-import { Plus, X, Edit, Save, Users, Search } from 'lucide-react';
+import { Plus, X, Edit, Save, Users } from 'lucide-react';
 import { getCurrentUser } from '../utils/getCurrentUser';
 
 export default function PersonnelManagement() {

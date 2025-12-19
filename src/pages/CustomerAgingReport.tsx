@@ -18,7 +18,7 @@ interface AgingRow {
 }
 
 export default function CustomerAgingReport() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [, setCustomers] = useState<Customer[]>([]);
   const [rows, setRows] = useState<AgingRow[]>([]);
   const [asOf, setAsOf] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);

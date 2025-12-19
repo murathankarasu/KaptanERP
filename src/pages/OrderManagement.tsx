@@ -4,7 +4,6 @@ import { addOrder, getOrders, updateOrder, Order, OrderItem } from '../services/
 import { getCustomers, Customer } from '../services/customerService';
 import { getPriceRules, PriceRule, selectPriceRule } from '../services/priceService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
-import { getCurrentUser } from '../utils/getCurrentUser';
 import { addErrorLog } from '../services/userService';
 import { Plus, X, Edit, Save, ShoppingCart, CheckCircle, Clock, XCircle, Download } from 'lucide-react';
 

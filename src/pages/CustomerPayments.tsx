@@ -4,7 +4,7 @@ import { getCustomers, Customer } from '../services/customerService';
 import { applyCustomerPayment, getCustomerTransactions, getCustomerAging } from '../services/financeService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
-import { CreditCard, Users, RefreshCw, Download } from 'lucide-react';
+import { CreditCard, RefreshCw, Download } from 'lucide-react';
 
 interface AgingBuckets {
   bucket0_30: number;

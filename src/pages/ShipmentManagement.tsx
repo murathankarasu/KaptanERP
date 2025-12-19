@@ -16,7 +16,7 @@ import { getQuotes, Quote, updateQuote } from '../services/quoteService';
 import { generateInvoicePDF } from '../utils/pdfEdocs';
 import { buildInvoiceUBL } from '../utils/ublLocal';
 import { addInvoice } from '../services/invoiceService';
-import { Plus, X, Edit, Save, Truck, FileText, CheckCircle, Clock, XCircle, Package } from 'lucide-react';
+import { Plus, X, Truck, FileText, CheckCircle, Clock, XCircle, Package } from 'lucide-react';
 
 export default function ShipmentManagement() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -329,11 +329,19 @@ export default function ShipmentManagement() {
       status: 'pending'
     });
     setNewItem({
+      sku: '',
+      variant: '',
       materialName: '',
       quantity: '',
       unit: '',
       unitPrice: '',
-      warehouse: ''
+      warehouse: '',
+      binCode: '',
+      serialLot: '',
+      expiryDate: '',
+      vatRate: '18',
+      currency: 'TRY',
+      exchangeRate: '1'
     });
   };
 

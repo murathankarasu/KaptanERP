@@ -270,7 +270,7 @@ const createPo = async (
   rows: ShortageRow[],
   supplierMap: Record<string, string>,
   defaultSupplier: string,
-  leadTime: number,
+  _leadTime: number,
   setCreating: (b: boolean) => void
 ) => {
   try {

@@ -11,7 +11,7 @@ export default function InviteAdmin() {
   const [invites, setInvites] = useState<InviteCode[]>([]);
   const [companyForm, setCompanyForm] = useState({ name: '', code: '' });
   const [inviteForm, setInviteForm] = useState({ code: '', companyId: '', role: 'manager' as 'manager' | 'user' });
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   useEffect(() => {
     if (currentUser?.role !== 'admin') {

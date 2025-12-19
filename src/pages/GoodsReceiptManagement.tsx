@@ -121,6 +121,19 @@ export default function GoodsReceiptManagement() {
     }
   };
 
+  const handleEdit = (grn: GoodsReceipt) => {
+    setEditingId(grn.id || null);
+    setForm({
+      grnNumber: grn.grnNumber,
+      receiptDate: grn.receiptDate.toISOString().split('T')[0],
+      warehouse: grn.warehouse || '',
+      items: grn.items,
+      status: grn.status,
+      createStock: false
+    });
+    setShowForm(true);
+  };
+
   const changeStatus = async (id: string, status: GoodsReceipt['status']) => {
     await updateGoodsReceipt(id, { status });
     loadData();
