@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { addStockOutput, getStockOutputs, StockOutput as StockOutputType, getAllStockStatus } from '../services/stockService';
+import { getPersonnel } from '../services/personnelService';
+import { getWarehouses } from '../services/warehouseService';
+import { addErrorLog } from '../services/userService';
+import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { exportStockOutputsToExcel } from '../utils/excelExport';
 import { useNavigate } from 'react-router-dom';
 import { Download, Plus, X, FileSignature } from 'lucide-react';
@@ -8,6 +12,8 @@ import { Download, Plus, X, FileSignature } from 'lucide-react';
 export default function StockOutput() {
   const [outputs, setOutputs] = useState<StockOutputType[]>([]);
   const [stockStatus, setStockStatus] = useState<any[]>([]);
+  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useState({
@@ -22,9 +28,15 @@ export default function StockOutput() {
     issueDate: new Date().toISOString().split('T')[0],
     employee: '',
     department: '',
+    sku: '',
+    variant: '',
     materialName: '',
     quantity: '',
     issuedBy: '',
+    warehouse: '',
+    binCode: '',
+    serialLot: '',
+    expiryDate: '',
     description: ''
   });
 
@@ -37,7 +49,10 @@ export default function StockOutput() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const filterParams: any = {};
+      const currentCompany = getCurrentCompany();
+      const filterParams: any = {
+        companyId: currentCompany?.companyId
+      };
       
       if (filters.employee) filterParams.employee = filters.employee;
       if (filters.department) filterParams.department = filters.department;
@@ -45,15 +60,27 @@ export default function StockOutput() {
       if (filters.startDate) filterParams.startDate = new Date(filters.startDate);
       if (filters.endDate) filterParams.endDate = new Date(filters.endDate);
 
-      const [outputsData, statusData] = await Promise.all([
+      const [outputsData, statusData, personnelData, warehousesData] = await Promise.all([
         getStockOutputs(filterParams),
-        getAllStockStatus()
+        getAllStockStatus(currentCompany?.companyId),
+        getPersonnel({ companyId: currentCompany?.companyId }),
+        getWarehouses(currentCompany?.companyId)
       ]);
       
       setOutputs(outputsData);
       setStockStatus(statusData);
-    } catch (error) {
+      setPersonnel(personnelData);
+      setWarehouses(warehousesData);
+    } catch (error: any) {
       console.error('Veriler yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Personel çıkış verileri yüklenirken hata: ${error.message || error}`,
+        'StockOutput',
+        userInfo?.id,
+        userInfo?.username
+      );
       alert('Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
@@ -76,15 +103,31 @@ export default function StockOutput() {
       return;
     }
     
+    // Personel kontrolü
+    const selectedPerson = personnel.find(p => p.name === formData.employee);
+    if (!selectedPerson) {
+      alert('Lütfen kayıtlı bir personel seçin. Personel Yönetimi sayfasından personel ekleyebilirsiniz.');
+      return;
+    }
+    
     try {
+      const currentCompany = getCurrentCompany();
       const output: StockOutputType = {
         issueDate: new Date(formData.issueDate),
         employee: formData.employee,
         department: formData.department,
+        sku: formData.sku || undefined,
+        variant: formData.variant || undefined,
+        personnelId: selectedPerson.id, // Personel ID'si
         materialName: formData.materialName,
         quantity: quantity,
         issuedBy: formData.issuedBy,
-        description: formData.description
+        warehouse: formData.warehouse || undefined,
+        binCode: formData.binCode || undefined,
+        serialLot: formData.serialLot || undefined,
+        expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : undefined,
+        description: formData.description,
+        companyId: currentCompany?.companyId
       };
 
       const outputId = await addStockOutput(output);
@@ -95,9 +138,15 @@ export default function StockOutput() {
         issueDate: new Date().toISOString().split('T')[0],
         employee: '',
         department: '',
+        sku: '',
+        variant: '',
         materialName: '',
         quantity: '',
         issuedBy: '',
+        warehouse: '',
+        binCode: '',
+        serialLot: '',
+        expiryDate: '',
         description: ''
       });
       loadData();
@@ -123,12 +172,26 @@ export default function StockOutput() {
     });
   };
 
-  const availableMaterials = stockStatus.filter(s => s.currentStock > 0);
-  const uniqueEmployees = Array.from(new Set(outputs.map(o => o.employee))).filter(Boolean);
-  const uniqueDepartments = Array.from(new Set(outputs.map(o => o.department))).filter(Boolean);
+  // Depo bazında stok kontrolü için - seçilen depoya göre malzemeleri filtrele
+  const getAvailableMaterialsForWarehouse = (warehouse?: string) => {
+    if (!warehouse) {
+      // Depo seçilmemişse tüm stokları göster (depo belirtilmemiş olanlar)
+      return stockStatus.filter(s => s.currentStock > 0 && !s.warehouse);
+    }
+    // Seçilen depodaki stokları göster
+    return stockStatus.filter(s => s.currentStock > 0 && s.warehouse === warehouse);
+  };
+
+  const availableMaterials = getAvailableMaterialsForWarehouse(formData.warehouse);
+  const uniqueEmployees = Array.from(new Set(personnel.map(p => p.name))).filter(Boolean);
+  const uniqueDepartments = Array.from(new Set(personnel.map(p => p.department))).filter(Boolean);
   const uniqueMaterials = Array.from(new Set(outputs.map(o => o.materialName))).filter(Boolean);
 
-  const selectedMaterial = stockStatus.find(s => s.materialName === formData.materialName);
+  // Depo bazında stok kontrolü
+  const selectedMaterial = stockStatus.find(s => 
+    s.materialName === formData.materialName && 
+    s.warehouse === (formData.warehouse || undefined)
+  );
   const maxQuantity = selectedMaterial?.currentStock || 0;
 
   return (
@@ -185,12 +248,51 @@ export default function StockOutput() {
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">Personel *</label>
+                  <select
+                    className="excel-form-select"
+                    value={formData.employee}
+                    onChange={(e) => {
+                      const selectedPerson = personnel.find(p => p.name === e.target.value);
+                      setFormData({ 
+                        ...formData, 
+                        employee: e.target.value,
+                        department: selectedPerson?.department || ''
+                      });
+                    }}
+                    required
+                    disabled={personnel.length === 0}
+                  >
+                    <option value="">Seçiniz</option>
+                    {personnel.map(p => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} - {p.department}
+                      </option>
+                    ))}
+                  </select>
+                  {personnel.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px' }}>
+                      Önce personel kaydı yapılmalıdır. Personel Yönetimi sayfasından ekleyin.
+                    </div>
+                  )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">SKU</label>
                   <input
                     type="text"
                     className="excel-form-input"
-                    value={formData.employee}
-                    onChange={(e) => setFormData({ ...formData, employee: e.target.value })}
-                    required
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    placeholder="Ürün kartı SKU (opsiyonel)"
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Varyant</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.variant}
+                    onChange={(e) => setFormData({ ...formData, variant: e.target.value })}
+                    placeholder="Örn: Kırmızı-M"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -201,6 +303,46 @@ export default function StockOutput() {
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     required
+                    readOnly
+                    style={{ background: '#f5f5f5' }}
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Depo *</label>
+                  <select
+                    className="excel-form-select"
+                    value={formData.warehouse}
+                    onChange={(e) => {
+                      // Depo değiştiğinde malzeme seçimini temizle
+                      setFormData({ 
+                        ...formData, 
+                        warehouse: e.target.value,
+                        materialName: '', // Depo değiştiğinde malzeme seçimini sıfırla
+                        quantity: '' // Miktarı da sıfırla
+                      });
+                    }}
+                    required
+                    disabled={warehouses.length === 0}
+                  >
+                    <option value="">Depo Seçiniz</option>
+                    {warehouses.map(w => (
+                      <option key={w.id} value={w.name}>{w.name}</option>
+                    ))}
+                  </select>
+                  {warehouses.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px' }}>
+                      Önce depo kaydı yapılmalıdır. Depo Yönetimi sayfasından ekleyin.
+                    </div>
+                  )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Raf/Göz (Bin)</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.binCode}
+                    onChange={(e) => setFormData({ ...formData, binCode: e.target.value })}
+                    placeholder="Örn: A-01-03"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -214,14 +356,20 @@ export default function StockOutput() {
                   >
                     <option value="">Seçiniz</option>
                     {availableMaterials.map(m => (
-                      <option key={m.materialName} value={m.materialName}>
-                        {m.materialName} (Mevcut: {m.currentStock} {m.unit})
+                      <option key={`${m.materialName}-${m.warehouse || 'no-warehouse'}`} value={m.materialName}>
+                        {m.materialName} {m.warehouse && `(${m.warehouse})`} (Mevcut: {m.currentStock} {m.unit})
                       </option>
                     ))}
                   </select>
                   {selectedMaterial && (
                     <div style={{ fontSize: '12px', color: '#7f8c8d', marginTop: '4px' }}>
                       Mevcut stok: {selectedMaterial.currentStock} {selectedMaterial.unit}
+                      {selectedMaterial.warehouse && ` - Depo: ${selectedMaterial.warehouse}`}
+                    </div>
+                  )}
+                  {formData.warehouse && availableMaterials.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px' }}>
+                      Seçilen depoda stok bulunmamaktadır.
                     </div>
                   )}
                 </div>
@@ -259,6 +407,25 @@ export default function StockOutput() {
                       Maksimum: {maxQuantity} {selectedMaterial?.unit}
                     </div>
                   )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Seri/Lot</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.serialLot}
+                    onChange={(e) => setFormData({ ...formData, serialLot: e.target.value })}
+                    placeholder="Lot veya seri no"
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">SKT</label>
+                  <input
+                    type="date"
+                    className="excel-form-input"
+                    value={formData.expiryDate}
+                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                  />
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">Teslim Eden *</label>
@@ -377,6 +544,7 @@ export default function StockOutput() {
                   <th>Malzeme Adı</th>
                   <th>Verilen Miktar</th>
                   <th>Teslim Eden</th>
+                  <th>Depo</th>
                   <th>Açıklama</th>
                   <th>İşlem</th>
                 </tr>
@@ -390,6 +558,7 @@ export default function StockOutput() {
                     <td>{output.materialName}</td>
                     <td>{output.quantity}</td>
                     <td>{output.issuedBy}</td>
+                    <td>{output.warehouse || '-'}</td>
                     <td>{output.description || '-'}</td>
                     <td>
                       <button

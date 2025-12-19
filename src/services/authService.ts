@@ -4,8 +4,10 @@ import {
   User 
 } from 'firebase/auth';
 import { 
-  doc, 
-  getDoc 
+  collection,
+  query,
+  where,
+  getDocs
 } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../firebase/config';
 
@@ -15,19 +17,27 @@ export interface AllowedUser {
   role?: string;
 }
 
+/**
+ * Kullanıcının Firestore'daki users koleksiyonunda kayıtlı olup olmadığını kontrol eder
+ * Admin panelden eklenen kullanıcıların email'leri ile Google giriş yapılabilir
+ */
 export const checkIfUserAllowed = async (email: string): Promise<boolean> => {
   try {
-    const allowedUsersRef = doc(db, 'settings', 'allowedUsers');
-    const allowedUsersSnap = await getDoc(allowedUsersRef);
-    
-    if (allowedUsersSnap.exists()) {
-      const data = allowedUsersSnap.data();
-      const allowedEmails = data.emails || [];
-      return allowedEmails.includes(email);
+    if (!email) {
+      return false;
     }
+
+    // Users koleksiyonunda bu email ile kayıtlı aktif kullanıcı var mı kontrol et
+    const usersRef = collection(db, 'users');
+    const q = query(
+      usersRef,
+      where('email', '==', email),
+      where('isActive', '==', true)
+    );
+    const querySnapshot = await getDocs(q);
     
-    // Eğer allowedUsers dokümanı yoksa, ilk kullanıcıya izin ver
-    return true;
+    // Eğer aktif bir kullanıcı bulunduysa giriş yapabilir
+    return !querySnapshot.empty;
   } catch (error) {
     console.error('Kullanıcı kontrolü hatası:', error);
     return false;
@@ -56,10 +66,18 @@ export const signInWithGoogle = async (): Promise<User | null> => {
 
 export const logout = async (): Promise<void> => {
   try {
-    await signOut(auth);
+    // Firebase auth state kontrolü - eğer kullanıcı giriş yapmışsa çıkış yap
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      await signOut(auth);
+    }
+    // localStorage'ı temizle (hem Firebase hem password-based login için)
+    localStorage.removeItem('currentUser');
   } catch (error) {
     console.error('Çıkış hatası:', error);
-    throw error;
+    // Hata olsa bile localStorage'ı temizle
+    localStorage.removeItem('currentUser');
+    // Hata fırlatma, sadece logla
   }
 };
 

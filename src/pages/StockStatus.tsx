@@ -1,28 +1,63 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { getAllStockStatus, StockStatus } from '../services/stockService';
+import { getWarehouses } from '../services/warehouseService';
+import { addErrorLog } from '../services/userService';
+import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { exportStockStatusToExcel } from '../utils/excelExport';
 import { Download, AlertCircle } from 'lucide-react';
 
 export default function StockStatusPage() {
   const [stockStatus, setStockStatus] = useState<StockStatus[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | 'green' | 'orange' | 'red'>('all');
+  const [filterWarehouse, setFilterWarehouse] = useState<string>('all');
+  const [filterSku, setFilterSku] = useState('');
+  const [filterVariant, setFilterVariant] = useState('');
+  const [filterBin, setFilterBin] = useState('');
 
   useEffect(() => {
     loadStockStatus();
-  }, []);
+    loadWarehouses();
+  }, [filterWarehouse]);
 
   const loadStockStatus = async () => {
     try {
       setLoading(true);
-      const data = await getAllStockStatus();
+      const currentCompany = getCurrentCompany();
+      const warehouse = filterWarehouse === 'all' ? undefined : filterWarehouse;
+      const data = await getAllStockStatus(
+        currentCompany?.companyId,
+        warehouse,
+        filterSku || undefined,
+        filterVariant || undefined,
+        filterBin || undefined
+      );
       setStockStatus(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Stok durumu yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Stok durumu yüklenirken hata: ${error.message || error}`,
+        'StockStatus',
+        userInfo?.id,
+        userInfo?.username
+      );
       alert('Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadWarehouses = async () => {
+    try {
+      const currentCompany = getCurrentCompany();
+      const data = await getWarehouses(currentCompany?.companyId);
+      setWarehouses(data);
+    } catch (error) {
+      console.error('Depolar yüklenirken hata:', error);
     }
   };
 
@@ -77,6 +112,59 @@ export default function StockStatusPage() {
           marginBottom: '20px',
           border: '2px solid #000'
         }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>Depo Filtresi</span>
+            <select
+              value={filterWarehouse}
+              onChange={(e) => setFilterWarehouse(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                border: '2px solid #000',
+                borderRadius: '0',
+                fontSize: '14px',
+                minWidth: '200px',
+                background: 'white'
+              }}
+            >
+              <option value="all">Tüm Depolar</option>
+              <option value="">Depo Belirtilmemiş</option>
+              {warehouses.map(warehouse => (
+                <option key={warehouse.id} value={warehouse.name}>{warehouse.name}</option>
+              ))}
+            </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>SKU</span>
+              <input
+                type="text"
+                value={filterSku}
+                onChange={(e) => setFilterSku(e.target.value)}
+                style={{ padding: '8px 12px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
+                placeholder="SKU"
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>Varyant</span>
+              <input
+                type="text"
+                value={filterVariant}
+                onChange={(e) => setFilterVariant(e.target.value)}
+                style={{ padding: '8px 12px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
+                placeholder="Renk/beden"
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>Raf/Göz</span>
+              <input
+                type="text"
+                value={filterBin}
+                onChange={(e) => setFilterBin(e.target.value)}
+                style={{ padding: '8px 12px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
+                placeholder="Bin kodu"
+              />
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontWeight: '600', color: '#000' }}>Durum Filtresi:</span>
             <button
@@ -187,7 +275,11 @@ export default function StockStatusPage() {
             <table className="excel-table">
               <thead>
                 <tr>
+                  <th>SKU</th>
                   <th>Malzeme Adı</th>
+                  <th>Varyant</th>
+                  <th>Depo</th>
+                  <th>Raf/Göz</th>
                   <th>Toplam Giriş</th>
                   <th>Toplam Çıkış</th>
                   <th>Mevcut Stok</th>
@@ -199,7 +291,11 @@ export default function StockStatusPage() {
               <tbody>
                 {filteredStatus.map((status) => (
                   <tr key={status.id}>
+                    <td style={{ fontWeight: '500' }}>{status.sku || '-'}</td>
                     <td style={{ fontWeight: '500' }}>{status.materialName}</td>
+                    <td>{status.variant || <span style={{ color: '#999' }}>-</span>}</td>
+                    <td>{status.warehouse || <span style={{ color: '#999' }}>-</span>}</td>
+                    <td>{status.binCode || <span style={{ color: '#999' }}>-</span>}</td>
                     <td>{status.totalEntry}</td>
                     <td>{status.totalOutput}</td>
                     <td style={{ 

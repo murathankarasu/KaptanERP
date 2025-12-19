@@ -1,20 +1,153 @@
 import { useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
 import { signInWithGoogle } from '../services/authService';
-import { useNavigate } from 'react-router-dom';
+import { verifyPassword, getUserByEmail, ensurePersonnelForUser } from '../services/userService';
+import { getPersonnelByEmail } from '../services/personnelService';
 import { LogIn, Package, BarChart3, TrendingUp, Boxes } from 'lucide-react';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [loginType, setLoginType] = useState<'google' | 'password'>('google');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      await signInWithGoogle();
-      navigate('/dashboard');
+      const firebaseUser = await signInWithGoogle();
+      
+      // Google login yapan kullanıcı için Firestore'dan kullanıcı bilgilerini çek
+      if (firebaseUser?.email) {
+        const user = await getUserByEmail(firebaseUser.email);
+        
+        if (!user) {
+          // Firestore'da kullanıcı yoksa giriş yapamaz
+          await signOut(auth);
+          setError('Bu email adresi ile kayıtlı bir kullanıcı bulunamadı. Lütfen admin panelden hesabınızın oluşturulduğundan emin olun.');
+          setLoading(false);
+          return;
+        }
+
+        // Admin kullanıcıları normal uygulamaya giremez
+        if (user.role === 'admin') {
+          await signOut(auth);
+          setError('Admin kullanıcıları için admin panel girişi kullanılmalıdır.');
+          setLoading(false);
+          return;
+        }
+
+        // Kullanıcı aktif değilse giriş yapamaz
+        if (!user.isActive) {
+          await signOut(auth);
+          setError('Hesabınız aktif değil. Lütfen admin ile iletişime geçin.');
+          setLoading(false);
+          return;
+        }
+
+        // Personel kaydını garanti et ve güncellenen şirket bilgilerini al
+        const ensured = await ensurePersonnelForUser(user);
+        
+        // Personel bilgilerini (yetkileri) çek
+        let personnelId = '';
+        let permissions: any[] = [];
+        if (ensured.companyId && ensured.email) {
+          const p = await getPersonnelByEmail(ensured.email, ensured.companyId);
+          if (p) {
+            personnelId = p.id || '';
+            permissions = p.permissions || [];
+          }
+        }
+
+        // Kullanıcı bilgilerini localStorage'a kaydet (companyId ve companyCode dahil)
+        localStorage.setItem('currentUser', JSON.stringify({
+          id: ensured.id,
+          username: ensured.username || firebaseUser.email,
+          email: ensured.email || firebaseUser.email,
+          fullName: ensured.fullName || firebaseUser.displayName || '',
+          role: ensured.role || 'user',
+          companyId: ensured.companyId,
+          companyCode: ensured.companyCode,
+          personnelId,
+          permissions
+        }));
+
+        // Last login güncellemesi için userService'i kullan
+        if (user.id) {
+          const { updateDoc, doc, Timestamp } = await import('firebase/firestore');
+          const { db } = await import('../firebase/config');
+          await updateDoc(doc(db, 'users', user.id), {
+            lastLogin: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          });
+        }
+      }
+      
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      setError(err.message || 'Giriş yapılırken bir hata oluştu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    
+    if (!identifier || !password) {
+      setError('E-posta veya kullanıcı adı ve şifre gereklidir');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('[login-password] input', { identifier });
+      const user = await verifyPassword(identifier, password);
+      console.log('[login-password] verify result', user);
+      if (user) {
+        // Admin kullanıcıları normal uygulamaya giremez, admin-login'e yönlendir
+        if (user.role === 'admin') {
+          setError('Admin kullanıcıları buradan giriş yapamaz. Lütfen Admin Login sayfasını kullanın.');
+          return;
+        }
+        
+        // Personel kaydını garanti et ve güncellenen şirket bilgilerini al
+        const ensured = await ensurePersonnelForUser(user);
+        
+        // Personel bilgilerini (yetkileri) çek
+        let personnelId = '';
+        let permissions: any[] = [];
+        if (ensured.companyId && ensured.email) {
+          const p = await getPersonnelByEmail(ensured.email, ensured.companyId);
+          if (p) {
+            personnelId = p.id || '';
+            permissions = p.permissions || [];
+          }
+        }
+
+        // Kullanıcı bilgilerini localStorage'a kaydet (companyId ve companyCode dahil)
+        localStorage.setItem('currentUser', JSON.stringify({
+          id: ensured.id,
+          username: ensured.username,
+          email: ensured.email,
+          fullName: ensured.fullName,
+          role: ensured.role,
+          companyId: ensured.companyId,
+          companyCode: ensured.companyCode,
+          personnelId,
+          permissions
+        }));
+        
+        // Sayfa yenilenmesi ile localStorage kontrolünün doğru çalışmasını sağla
+        window.location.href = '/dashboard';
+      } else {
+        setError('Kullanıcı adı veya şifre hatalı');
+      }
     } catch (err: any) {
       setError(err.message || 'Giriş yapılırken bir hata oluştu');
     } finally {
@@ -348,6 +481,53 @@ export default function Login() {
             </p>
           </div>
 
+          {/* Giriş Tipi Seçimi */}
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            marginBottom: '30px',
+            border: '2px solid #000',
+            padding: '4px',
+            background: 'white'
+          }}>
+            <button
+              type="button"
+              onClick={() => setLoginType('password')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: loginType === 'password' ? '#000' : 'transparent',
+                color: loginType === 'password' ? '#fff' : '#000',
+                border: 'none',
+                borderRadius: '0',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Şifre ile Giriş
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginType('google')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: loginType === 'google' ? '#000' : 'transparent',
+                color: loginType === 'google' ? '#fff' : '#000',
+                border: 'none',
+                borderRadius: '0',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              Google ile Giriş
+            </button>
+          </div>
+
           {error && (
             <div style={{
               background: '#fff',
@@ -363,55 +543,137 @@ export default function Login() {
             </div>
           )}
 
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '18px 24px',
-              background: loading ? '#ccc' : '#000',
-              color: 'white',
-              border: '2px solid #000',
-              borderRadius: '0',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '12px',
-              transition: 'all 0.2s',
-              letterSpacing: '0.5px',
-              textTransform: 'uppercase',
-              marginBottom: '24px'
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = '#333';
-                e.currentTarget.style.borderColor = '#333';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) {
-                e.currentTarget.style.background = '#000';
-                e.currentTarget.style.borderColor = '#000';
-              }
-            }}
-          >
-            <LogIn size={22} />
-            {loading ? 'Giriş yapılıyor...' : 'Google ile Giriş Yap'}
-          </button>
+          {/* Şifre ile Giriş Formu */}
+          {loginType === 'password' && (
+            <form onSubmit={handlePasswordLogin} style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '20px' }}>
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="E-posta veya Kullanıcı Adı"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    border: '2px solid #000',
+                    borderRadius: '0',
+                    fontSize: '14px',
+                    marginBottom: '15px',
+                    background: 'white',
+                    color: '#000'
+                  }}
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Şifre"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    border: '2px solid #000',
+                    borderRadius: '0',
+                    fontSize: '14px',
+                    background: 'white',
+                    color: '#000'
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '18px 24px',
+                  background: loading ? '#ccc' : '#000',
+                  color: 'white',
+                  border: '2px solid #000',
+                  borderRadius: '0',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase'
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.background = '#333';
+                    e.currentTarget.style.borderColor = '#333';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.background = '#000';
+                    e.currentTarget.style.borderColor = '#000';
+                  }
+                }}
+              >
+                <LogIn size={22} />
+                {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+              </button>
+            </form>
+          )}
 
-          <p style={{
-            fontSize: '12px',
-            color: '#999',
-            lineHeight: '1.6',
-            letterSpacing: '0.3px',
-            maxWidth: '400px',
-            margin: '0 auto'
-          }}>
-            Sadece yetkili Google hesapları ile giriş yapabilirsiniz.
-          </p>
+          {/* Google ile Giriş Butonu */}
+          {loginType === 'google' && (
+            <>
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '18px 24px',
+                  background: loading ? '#ccc' : '#000',
+                  color: 'white',
+                  border: '2px solid #000',
+                  borderRadius: '0',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  marginBottom: '24px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.background = '#333';
+                    e.currentTarget.style.borderColor = '#333';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.background = '#000';
+                    e.currentTarget.style.borderColor = '#000';
+                  }
+                }}
+              >
+                <LogIn size={22} />
+                {loading ? 'Giriş yapılıyor...' : 'Google ile Giriş Yap'}
+              </button>
+              <p style={{
+                fontSize: '12px',
+                color: '#999',
+                lineHeight: '1.6',
+                letterSpacing: '0.3px',
+                maxWidth: '400px',
+                margin: '0 auto'
+              }}>
+                Sadece yetkili Google hesapları ile giriş yapabilirsiniz.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

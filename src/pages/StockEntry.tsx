@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import { addStockEntry, getStockEntries, StockEntry as StockEntryType, updateStockStatusOnEntry } from '../services/stockService';
+import { getWarehouses } from '../services/warehouseService';
+import { addErrorLog } from '../services/userService';
+import { addActivityLog } from '../services/activityLogService';
+import { getCurrentCompany } from '../utils/getCurrentCompany';
+import { getCurrentUser } from '../utils/getCurrentUser';
 import { exportStockEntriesToExcel } from '../utils/excelExport';
 import { importStockEntriesFromExcel } from '../utils/excelImport';
 import AIFormatFixModal from '../components/AIFormatFixModal';
@@ -23,26 +28,49 @@ export default function StockEntry() {
     endDate: ''
   });
 
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     arrivalDate: new Date().toISOString().split('T')[0],
+    sku: '',
     materialName: '',
     category: '',
+    variant: '',
     unit: '',
+    baseUnit: '',
+    conversionFactor: '',
     quantity: '',
     unitPrice: '',
     supplier: '',
+    warehouse: '',
+    binCode: '',
+    serialLot: '',
+    expiryDate: '',
     note: '',
     criticalLevel: ''
   });
 
   useEffect(() => {
     loadEntries();
+    loadWarehouses();
   }, [filters]);
+
+  const loadWarehouses = async () => {
+    try {
+      const currentCompany = getCurrentCompany();
+      const data = await getWarehouses(currentCompany?.companyId);
+      setWarehouses(data);
+    } catch (error) {
+      console.error('Depolar yüklenirken hata:', error);
+    }
+  };
 
   const loadEntries = async () => {
     try {
       setLoading(true);
-      const filterParams: any = {};
+      const currentCompany = getCurrentCompany();
+      const filterParams: any = {
+        companyId: currentCompany?.companyId
+      };
       
       if (filters.materialName) filterParams.materialName = filters.materialName;
       if (filters.category) filterParams.category = filters.category;
@@ -52,8 +80,16 @@ export default function StockEntry() {
 
       const data = await getStockEntries(filterParams);
       setEntries(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Stok girişleri yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Stok girişleri yüklenirken hata: ${error.message || error}`,
+        'StockEntry',
+        userInfo?.id,
+        userInfo?.username
+      );
       alert('Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
@@ -84,42 +120,92 @@ export default function StockEntry() {
     }
     
     try {
+      const currentCompany = getCurrentCompany();
       const entry: StockEntryType = {
         arrivalDate: new Date(formData.arrivalDate),
+        sku: formData.sku || undefined,
         materialName: formData.materialName,
         category: formData.category,
+        variant: formData.variant || undefined,
         unit: formData.unit,
+        baseUnit: formData.baseUnit || undefined,
+        conversionFactor: formData.conversionFactor ? parseFloat(formData.conversionFactor) : undefined,
         quantity: quantity,
         unitPrice: unitPrice,
         supplier: formData.supplier,
-        note: formData.note
+        warehouse: formData.warehouse || undefined,
+        binCode: formData.binCode || undefined,
+        serialLot: formData.serialLot || undefined,
+        expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : undefined,
+        note: formData.note,
+        companyId: currentCompany?.companyId
       };
 
-      await addStockEntry(entry);
+      const entryId = await addStockEntry(entry);
       
-      // Stok durumunu güncelle
+      // Stok durumunu güncelle (depo bilgisi ile)
       await updateStockStatusOnEntry(
         formData.materialName,
         quantity,
         formData.unit,
-        criticalLevel
+        criticalLevel,
+        currentCompany?.companyId,
+        formData.warehouse || undefined
       );
+
+      // Aktivite logu kaydet
+      const currentUser = getCurrentUser();
+      await addActivityLog({
+        userId: currentUser?.id,
+        username: currentUser?.username,
+        userEmail: currentUser?.email,
+        personnelId: currentUser?.personnelId,
+        personnelName: currentUser?.fullName,
+        action: `Stok Giriş Eklendi: ${formData.materialName} (${quantity} ${formData.unit})`,
+        module: 'stock_entry',
+        details: JSON.stringify({
+          entryId,
+          materialName: formData.materialName,
+          quantity,
+          unit: formData.unit,
+          unitPrice,
+          supplier: formData.supplier,
+          warehouse: formData.warehouse
+        }),
+        companyId: currentCompany?.companyId
+      });
 
       alert('Stok girişi başarıyla eklendi!');
       setShowForm(false);
       setFormData({
         arrivalDate: new Date().toISOString().split('T')[0],
+        sku: '',
         materialName: '',
         category: '',
+        variant: '',
         unit: '',
+        baseUnit: '',
+        conversionFactor: '',
         quantity: '',
         unitPrice: '',
         supplier: '',
+        warehouse: '',
+        binCode: '',
+        serialLot: '',
+        expiryDate: '',
         note: '',
         criticalLevel: ''
       });
       loadEntries();
     } catch (error: any) {
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Stok girişi eklenirken hata: ${error.message || error}`,
+        'StockEntry',
+        userInfo?.id,
+        userInfo?.username
+      );
       alert('Hata: ' + (error.message || 'Stok girişi eklenirken bir hata oluştu'));
     }
   };
@@ -188,12 +274,15 @@ export default function StockEntry() {
         try {
           await addStockEntry(entry);
           
-          // Stok durumunu güncelle
+          // Stok durumunu güncelle (depo bilgisi ile)
+          const currentCompany = getCurrentCompany();
           await updateStockStatusOnEntry(
             entry.materialName,
             entry.quantity,
             entry.unit,
-            0 // Kritik seviye import'ta belirtilmemişse 0
+            0, // Kritik seviye import'ta belirtilmemişse 0
+            currentCompany?.companyId,
+            entry.warehouse || undefined
           );
           
           successCount++;
@@ -221,6 +310,14 @@ export default function StockEntry() {
       // Listeyi yenile
       loadEntries();
     } catch (error: any) {
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Excel dosyası içe aktarılırken hata: ${error.message || error}`,
+        'StockEntry',
+        userInfo?.id,
+        userInfo?.username
+      );
       alert('Excel dosyası içe aktarılırken hata: ' + error.message);
     } finally {
       setImporting(false);
@@ -299,6 +396,16 @@ export default function StockEntry() {
                   />
                 </div>
                 <div className="excel-form-group">
+                  <label className="excel-form-label">SKU</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    placeholder="Ürün kartı SKU (opsiyonel)"
+                  />
+                </div>
+                <div className="excel-form-group">
                   <label className="excel-form-label">Malzeme Adı *</label>
                   <input
                     type="text"
@@ -319,6 +426,16 @@ export default function StockEntry() {
                   />
                 </div>
                 <div className="excel-form-group">
+                  <label className="excel-form-label">Varyant (Renk/Beden)</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.variant}
+                    onChange={(e) => setFormData({ ...formData, variant: e.target.value })}
+                    placeholder="Örn: Kırmızı-M"
+                  />
+                </div>
+                <div className="excel-form-group">
                   <label className="excel-form-label">Birim *</label>
                   <select
                     className="excel-form-select"
@@ -334,6 +451,27 @@ export default function StockEntry() {
                     <option value="m³">m³</option>
                     <option value="Paket">Paket</option>
                   </select>
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Temel Birim</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.baseUnit}
+                    onChange={(e) => setFormData({ ...formData, baseUnit: e.target.value })}
+                    placeholder="Ürün kartındaki temel birim"
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Dönüşüm Katsayısı</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="excel-form-input"
+                    value={formData.conversionFactor}
+                    onChange={(e) => setFormData({ ...formData, conversionFactor: e.target.value })}
+                    placeholder="Örn: Koli→Adet"
+                  />
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">Gelen Miktar *</label>
@@ -368,6 +506,55 @@ export default function StockEntry() {
                   />
                 </div>
                 <div className="excel-form-group">
+                  <label className="excel-form-label">Depo</label>
+                  <select
+                    className="excel-form-select"
+                    value={formData.warehouse}
+                    onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
+                  >
+                    <option value="">Depo Seçiniz (Opsiyonel)</option>
+                    {warehouses.map(warehouse => (
+                      <option key={warehouse.id} value={warehouse.name}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                  {warehouses.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                      Depo Yönetimi sayfasından depo ekleyebilirsiniz.
+                    </div>
+                  )}
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Raf/Göz (Bin)</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.binCode}
+                    onChange={(e) => setFormData({ ...formData, binCode: e.target.value })}
+                    placeholder="Örn: A-01-03"
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Seri/Lot</label>
+                  <input
+                    type="text"
+                    className="excel-form-input"
+                    value={formData.serialLot}
+                    onChange={(e) => setFormData({ ...formData, serialLot: e.target.value })}
+                    placeholder="Lot veya seri no"
+                  />
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">SKT</label>
+                  <input
+                    type="date"
+                    className="excel-form-input"
+                    value={formData.expiryDate}
+                    onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                  />
+                </div>
+                <div className="excel-form-group">
                   <label className="excel-form-label">Kritik Seviye</label>
                   <input
                     type="number"
@@ -377,7 +564,6 @@ export default function StockEntry() {
                     value={formData.criticalLevel}
                     onChange={(e) => {
                       const value = e.target.value;
-                      // Sadece sayı ve ondalık nokta kabul et
                       if (value === '' || /^\d*\.?\d*$/.test(value)) {
                         setFormData({ ...formData, criticalLevel: value });
                       }
@@ -498,6 +684,7 @@ export default function StockEntry() {
                   <th>Gelen Miktar</th>
                   <th>Birim Fiyat</th>
                   <th>Tedarikçi</th>
+                  <th>Depo</th>
                   <th>Not</th>
                 </tr>
               </thead>
@@ -511,6 +698,7 @@ export default function StockEntry() {
                     <td>{entry.quantity}</td>
                     <td>{entry.unitPrice.toFixed(2)} ₺</td>
                     <td>{entry.supplier}</td>
+                    <td>{entry.warehouse || '-'}</td>
                     <td>{entry.note || '-'}</td>
                   </tr>
                 ))}
@@ -534,6 +722,7 @@ export default function StockEntry() {
               setImporting(true);
               setImportProgress(0);
               
+              const currentCompany = getCurrentCompany();
               let successCount = 0;
               let errorCount = 0;
               
@@ -550,12 +739,13 @@ export default function StockEntry() {
                     quantity: parseFloat(row.quantity || row['Gelen Miktar'] || '0'),
                     unitPrice: parseFloat(row.unitPrice || row['Birim Fiyat'] || '0'),
                     supplier: String(row.supplier || row['Tedarikçi'] || '').trim(),
-                    note: String(row.note || row['Not'] || '').trim()
+                    note: String(row.note || row['Not'] || '').trim(),
+                    companyId: currentCompany?.companyId
                   };
                   
                   if (entry.materialName && entry.category && entry.unit) {
                     await addStockEntry(entry);
-                    await updateStockStatusOnEntry(entry.materialName, entry.quantity, entry.unit, 0);
+                    await updateStockStatusOnEntry(entry.materialName, entry.quantity, entry.unit, 0, currentCompany?.companyId, entry.warehouse || undefined);
                     successCount++;
                   } else {
                     errorCount++;

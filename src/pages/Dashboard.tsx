@@ -3,6 +3,8 @@ import Layout from '../components/Layout';
 import { getAllStockStatus, getStockEntries, getStockOutputs } from '../services/stockService';
 import { StockStatus, StockEntry, StockOutput } from '../services/stockService';
 import { generateAIStatusReport, generateDailyAIReport } from '../services/aiService';
+import { addErrorLog } from '../services/userService';
+import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { Package, AlertTriangle, TrendingUp, Brain, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 
@@ -21,10 +23,13 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
+      const currentCompany = getCurrentCompany();
+      const companyId = currentCompany?.companyId;
+      
       const [statuses, entries, outputs] = await Promise.all([
-        getAllStockStatus(),
-        getStockEntries(),
-        getStockOutputs()
+        getAllStockStatus(companyId),
+        getStockEntries(companyId ? { companyId } : undefined),
+        getStockOutputs(companyId ? { companyId } : undefined)
       ]);
 
       setStockStatus(statuses);
@@ -33,8 +38,16 @@ export default function Dashboard() {
       
       // Günlük AI raporunu otomatik yükle
       loadDailyAIReport(statuses, entries, outputs);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Dashboard verileri yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Dashboard verileri yüklenirken hata: ${error.message || error}`,
+        'Dashboard',
+        userInfo?.id,
+        userInfo?.username
+      );
     } finally {
       setLoading(false);
     }
@@ -45,8 +58,16 @@ export default function Dashboard() {
       setLoadingAI(true);
       const report = await generateAIStatusReport(stockStatus, recentEntries, recentOutputs);
       setAiReport(report);
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI rapor yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `AI rapor yüklenirken hata: ${error.message || error}`,
+        'Dashboard',
+        userInfo?.id,
+        userInfo?.username
+      );
     } finally {
       setLoadingAI(false);
     }
@@ -56,8 +77,16 @@ export default function Dashboard() {
     try {
       const report = await generateDailyAIReport(statuses, entries, outputs);
       setDailyReport(report);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Günlük AI rapor yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Günlük AI rapor yüklenirken hata: ${error.message || error}`,
+        'Dashboard',
+        userInfo?.id,
+        userInfo?.username
+      );
     }
   };
 
