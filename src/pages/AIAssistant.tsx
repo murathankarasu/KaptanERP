@@ -8,13 +8,12 @@ import { getCustomers } from '../services/customerService';
 import { getPersonnel } from '../services/personnelService';
 import { generateAIStatusReport, generateDailyAIReport, askERPAI, AIStatusReport, AIDailyReport, AINaturalAnswer } from '../services/aiService';
 import { addErrorLog } from '../services/userService';
-import { Brain, MessageCircle, BarChart3, AlertTriangle, ListChecks } from 'lucide-react';
+import { Brain, MessageCircle, BarChart3, ListChecks } from 'lucide-react';
 
 type Mode = 'qa' | 'stock' | 'daily';
 
 const AIAssistantPage = () => {
   const company = getCurrentCompany();
-  const user = getCurrentUser();
 
   const [mode, setMode] = useState<Mode>('qa');
   const [question, setQuestion] = useState('');

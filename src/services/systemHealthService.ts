@@ -1,4 +1,4 @@
-import { collection, addDoc, deleteDoc, doc, getDocs, limit, query, Timestamp, where } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, getDocs, limit, query, Timestamp, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 export type HealthStatus = 'ok' | 'warn' | 'fail';
