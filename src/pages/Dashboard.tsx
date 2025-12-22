@@ -540,7 +540,7 @@ export default function Dashboard() {
                     <div>
                       <strong style={{ color: '#000', fontWeight: '600' }}>{entry.materialName}</strong>
                       <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-                        {entry.arrivalDate.toLocaleDateString('tr-TR')} - {entry.quantity} {entry.unit}
+                        {entry.arrivalDate ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR') : ''} - {entry.quantity} {entry.unit}
                       </div>
                     </div>
                   </div>
