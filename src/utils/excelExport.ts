@@ -3,7 +3,9 @@ import { StockEntry, StockOutput, StockStatus } from '../services/stockService';
 
 export const exportStockEntriesToExcel = (entries: StockEntry[], filename: string = 'stok_girisleri.xlsx') => {
   const data = entries.map(entry => ({
-    'Geliş Tarihi': entry.arrivalDate.toLocaleDateString('tr-TR'),
+    'Geliş Tarihi': entry.arrivalDate
+      ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR')
+      : '',
     'Malzeme Adı': entry.materialName,
     'Kategori': entry.category,
     'Birim': entry.unit,
@@ -35,7 +37,9 @@ export const exportStockEntriesToExcel = (entries: StockEntry[], filename: strin
 
 export const exportStockOutputsToExcel = (outputs: StockOutput[], filename: string = 'personel_cikislari.xlsx') => {
   const data = outputs.map(output => ({
-    'Veriliş Tarihi': output.issueDate.toLocaleDateString('tr-TR'),
+    'Veriliş Tarihi': output.issueDate
+      ? new Date(output.issueDate as any).toLocaleDateString('tr-TR')
+      : '',
     'Personel': output.employee,
     'Departman': output.department,
     'Malzeme Adı': output.materialName,

@@ -335,7 +335,9 @@ export default function Dashboard() {
                 <AreaChart data={recentEntries.map((entry) => ({
                   name: entry.materialName.substring(0, 10),
                   miktar: entry.quantity,
-                  tarih: entry.arrivalDate.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })
+                  tarih: entry.arrivalDate
+                    ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' })
+                    : ''
                 }))}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
