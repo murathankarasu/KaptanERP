@@ -31,12 +31,30 @@ export interface Product {
 
 const collectionName = 'products';
 
+// Firestore add/update undefined alanları kabul etmiyor; temizleyici
+const cleanPayload = (obj: Record<string, any>) => {
+  Object.keys(obj).forEach((key) => {
+    const value = obj[key];
+    if (value === undefined) {
+      delete obj[key];
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      cleanPayload(value);
+      // alt obje tamamen boş kaldıysa sil
+      if (Object.keys(value).length === 0) {
+        delete obj[key];
+      }
+    }
+  });
+  return obj;
+};
+
 export const addProduct = async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, collectionName), {
+  const payload = cleanPayload({
     ...product,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   });
+  const docRef = await addDoc(collection(db, collectionName), payload);
   return docRef.id;
 };
 
@@ -56,10 +74,11 @@ export const getProducts = async (companyId?: string): Promise<Product[]> => {
 
 export const updateProduct = async (id: string, product: Partial<Product>) => {
   const ref = doc(db, collectionName, id);
-  await updateDoc(ref, {
+  const payload = cleanPayload({
     ...product,
     updatedAt: Timestamp.now()
   });
+  await updateDoc(ref, payload);
 };
 
 export const deleteProduct = async (id: string) => {

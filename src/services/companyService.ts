@@ -13,6 +13,23 @@ export interface Company {
 
 const companiesCollection = 'companies';
 
+const cleanPayload = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy: any = { ...obj };
+  Object.keys(copy).forEach((key) => {
+    const value = copy[key];
+    if (value === undefined) {
+      delete copy[key];
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      copy[key] = cleanPayload(value);
+      if (copy[key] && typeof copy[key] === 'object' && Object.keys(copy[key]).length === 0) {
+        delete copy[key];
+      }
+    }
+  });
+  return copy;
+};
+
 export const getCompanyById = async (id: string): Promise<Company | null> => {
   const docRef = doc(db, companiesCollection, id);
   const snap = await getDoc(docRef);
@@ -27,12 +44,13 @@ export const getCompanyById = async (id: string): Promise<Company | null> => {
 };
 
 export const addCompany = async (company: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, companiesCollection), {
+  const payload = cleanPayload({
     ...company,
     isActive: company.isActive ?? true,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   });
+  const docRef = await addDoc(collection(db, companiesCollection), payload);
   return docRef.id;
 };
 
@@ -79,10 +97,11 @@ export const getCompanyByName = async (name: string): Promise<Company | null> =>
 
 export const updateCompany = async (id: string, company: Partial<Omit<Company, 'id' | 'createdAt'>>): Promise<void> => {
   const docRef = doc(db, companiesCollection, id);
-  await updateDoc(docRef, {
+  const payload = cleanPayload({
     ...company,
     updatedAt: Timestamp.now()
   });
+  await updateDoc(docRef, payload);
 };
 
 export const deleteCompany = async (id: string): Promise<void> => {

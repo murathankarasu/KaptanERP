@@ -42,12 +42,21 @@ const collectionName = 'orders';
 
 export const addOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, collectionName), {
+    const payload: any = {
       ...order,
       orderDate: Timestamp.fromDate(order.orderDate),
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
+    };
+
+    // Firestore addDoc undefined alanları desteklemez, temizle
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined) {
+        delete payload[key];
+      }
     });
+
+    const docRef = await addDoc(collection(db, collectionName), payload);
     return docRef.id;
   } catch (error) {
     console.error('Sipariş eklenirken hata:', error);

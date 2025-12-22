@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { logout } from '../services/authService';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { hasPermission, getAllPermissions, PermissionType } from '../types/permissions';
-import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info, Brain } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -40,7 +40,8 @@ export default function Layout({ children }: LayoutProps) {
       title: 'Genel',
       items: [
         { path: '/dashboard', label: 'Yönetim Paneli', icon: LayoutDashboard, permission: 'dashboard' as PermissionType },
-        { path: '/about', label: 'Hakkında', icon: Info, permission: 'dashboard' as PermissionType }
+        { path: '/about', label: 'Hakkında', icon: Info, permission: 'dashboard' as PermissionType },
+        { path: '/ai-assistant', label: 'Yapay Zeka Asistanı', icon: Brain, permission: 'dashboard' as PermissionType }
       ]
     },
     {
@@ -103,10 +104,10 @@ export default function Layout({ children }: LayoutProps) {
       title: 'Kayıt / Admin',
       items: [
         ...(isManager ? [{ path: '/activity-logs', label: 'Kullanıcı İşlemleri', icon: Activity, permission: null }] : []),
+        { path: '/settings', label: 'Ayarlar', icon: Shield, permission: null },
         ...(isAdmin ? [
           { path: '/transaction-orders', label: 'İşlem Kayıtları', icon: FileText, permission: null },
-          { path: '/admin-panel', label: 'Yönetici Paneli', icon: Shield, permission: null },
-          { path: '/settings', label: 'Ayarlar', icon: Shield, permission: null }
+          { path: '/admin-panel', label: 'Yönetici Paneli', icon: Shield, permission: null }
         ] : [])
       ]
     }

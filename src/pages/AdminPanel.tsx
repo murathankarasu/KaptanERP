@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { getUsers, addUser, updateUser, deleteUser, User } from '../services/userService';
 import { getErrorLogs, resolveErrorLog, ErrorLog } from '../services/userService';
-import { getCompanies, Company, getCompanyByCode } from '../services/companyService';
+import { getCompanies, Company, addCompany } from '../services/companyService';
+import { runHealthCheck, getLatestHealthReport, HealthReport } from '../services/systemHealthService';
 import { getInviteCodes, InviteCode } from '../services/inviteService';
-import { Plus, X, Edit, Save, Shield, CheckCircle } from 'lucide-react';
+import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound } from 'lucide-react';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export default function AdminPanel() {
   const [errorFilter, setErrorFilter] = useState<'all' | 'resolved' | 'unresolved'>('unresolved');
 
   const [userFormData, setUserFormData] = useState({
+    accountType: 'existing' as 'existing' | 'new',
     username: '',
     password: '',
     email: '',
@@ -31,6 +33,10 @@ export default function AdminPanel() {
     companyName: '', // Yeni şirket adı (sadece yeni manager oluştururken)
     isActive: true
   });
+  const [showHash, setShowHash] = useState<Record<string, boolean>>({});
+  const [healthReport, setHealthReport] = useState<HealthReport | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthMessage, setHealthMessage] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -52,6 +58,7 @@ export default function AdminPanel() {
       loadUsers();
       loadCompanies();
       loadInvites();
+      loadHealthLatest();
     } else {
       loadErrorLogs();
     }
@@ -70,7 +77,7 @@ export default function AdminPanel() {
     try {
       setLoading(true);
       const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
-      const data = await getUsers(companyId);
+      const data = await getUsers(companyId, true);
       setUsers(data);
     } catch (error) {
       console.error('Kullanıcılar yüklenirken hata:', error);
@@ -86,6 +93,15 @@ export default function AdminPanel() {
       setInvites(data);
     } catch (error) {
       console.error('Davet kodları yüklenirken hata:', error);
+    }
+  };
+
+  const loadHealthLatest = async () => {
+    try {
+      const report = await getLatestHealthReport();
+      setHealthReport(report);
+    } catch (error) {
+      console.error('Sağlık raporu okunamadı', error);
     }
   };
 
@@ -109,15 +125,36 @@ export default function AdminPanel() {
     }
   };
 
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz0123456789!@#$%';
+    let out = '';
+    for (let i = 0; i < 12; i++) {
+      out += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return out;
+  };
+
+  const handleRunHealth = async () => {
+    try {
+      setHealthLoading(true);
+      setHealthMessage(null);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      const report = await runHealthCheck(userInfo?.id, userInfo?.username);
+      setHealthReport(report);
+      setHealthMessage('Sistem testi tamamlandı');
+    } catch (error: any) {
+      setHealthMessage('Sistem testi başarısız: ' + (error.message || ''));
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
   const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!userFormData.username || (!editingUserId && !userFormData.password)) {
       alert('Kullanıcı adı ve şifre zorunludur');
-      return;
-    }
-    if (!userFormData.companyCode) {
-      alert('Şirket kodu zorunludur');
       return;
     }
 
@@ -126,22 +163,50 @@ export default function AdminPanel() {
       let targetCompanyCode = userFormData.companyCode;
       let targetCompanyName = userFormData.companyName;
 
-      // Şirket kodu ile firmayı bul
-      const company = await getCompanyByCode(userFormData.companyCode.trim());
-      if (!company) {
-        alert('Geçerli bir şirket kodu girin');
-        return;
+      if (userFormData.accountType === 'existing') {
+        if (!userFormData.companyId) {
+          alert('Lütfen var olan bir şirket seçin');
+          return;
+        }
+        const company = companies.find(c => c.id === userFormData.companyId);
+        if (!company) {
+          alert('Geçerli bir şirket seçin');
+          return;
+        }
+        targetCompanyId = company.id || '';
+        targetCompanyCode = company.code || '';
+        targetCompanyName = company.name || '';
+      } else {
+        // Yeni şirket oluştur ve kullanıcıyı yönetici olarak ata
+        if (!userFormData.companyName) {
+          alert('Yeni şirket adı zorunludur');
+          return;
+        }
+        if (!userFormData.companyCode) {
+          alert('Yeni şirket için kod girin');
+          return;
+        }
+        const newCompanyId = await addCompany({
+          name: userFormData.companyName,
+          code: userFormData.companyCode,
+          isActive: true
+        });
+        // Listeyi tazele ki yeni şirket hemen seçilebilir olsun
+        await loadCompanies();
+        targetCompanyId = newCompanyId;
+        targetCompanyCode = userFormData.companyCode;
+        targetCompanyName = userFormData.companyName;
       }
-      targetCompanyId = company.id || '';
-      targetCompanyCode = company.code || '';
-      targetCompanyName = company.name || '';
+
+      const finalRole = userFormData.accountType === 'new' ? 'manager' : userFormData.role;
 
       if (editingUserId) {
         const updateData: any = {
           ...userFormData,
           companyId: targetCompanyId,
           companyCode: targetCompanyCode,
-          companyName: targetCompanyName
+          companyName: targetCompanyName,
+          role: finalRole
         };
         if (userFormData.password) {
           updateData.password = userFormData.password;
@@ -158,7 +223,8 @@ export default function AdminPanel() {
           companyId: targetCompanyId,
           companyCode: targetCompanyCode,
           companyName: targetCompanyName,
-          password: userFormData.password
+          password: userFormData.password,
+          role: finalRole
         };
         await addUser(userData);
         alert('Kullanıcı başarıyla eklendi!');
@@ -177,6 +243,7 @@ export default function AdminPanel() {
     setEditingUserId(user.id || null);
     const userCompany = companies.find(c => c.id === user.companyId);
     setUserFormData({
+      accountType: 'existing',
       username: user.username,
       password: '', // Şifreyi gösterme
       email: user.email || '',
@@ -204,6 +271,19 @@ export default function AdminPanel() {
     }
   };
 
+  const handleResetPassword = async (user: User) => {
+    if (!user.id) return;
+    const newPass = generatePassword();
+    if (!confirm(`Yeni şifre üretilecek ve kullanıcıya kaydedilecek.\n\nYeni şifre: ${newPass}\n\nOnaylıyor musunuz?`)) return;
+    try {
+      await updateUser(user.id, { password: newPass });
+      alert(`Şifre sıfırlandı.\nYeni şifre: ${newPass}`);
+      loadUsers();
+    } catch (error: any) {
+      alert('Şifre sıfırlama hatası: ' + (error.message || ''));
+    }
+  };
+
   const handleResolveError = async (id: string) => {
     try {
       const currentUser = localStorage.getItem('currentUser');
@@ -218,6 +298,7 @@ export default function AdminPanel() {
 
   const resetUserForm = () => {
     setUserFormData({
+      accountType: 'existing',
       username: '',
       password: '',
       email: '',
@@ -262,7 +343,51 @@ export default function AdminPanel() {
               </button>
             </div>
             <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid #ddd', background: '#f8f8f8', color: '#333', fontSize: '13px' }}>
-              Yeni kullanıcı eklerken şirket kodunu girerek var olan firmaya bağlayın. Davet kodu ile kayıt olanlar da buraya düşer; rol/aktiflik düzenleyebilirsiniz.
+              Yeni kullanıcı eklerken önce hesap türünü seçin: Var olan şirkete kullanıcı bağlayın veya yeni şirket açıp yöneticisini oluşturun. Davet kodu ile kayıt olanlar da buraya düşer; rol/aktiflik düzenleyebilirsiniz.
+            </div>
+
+            {/* Sistem Sağlık Kartı */}
+            <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid #ddd', background: '#fff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Shield size={16} />
+                    Sistem Sağlığı
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Son kontrol: {healthReport?.createdAt ? new Date(healthReport.createdAt).toLocaleString('tr-TR') : 'Yok'}
+                    {' • '}Durum: {healthReport?.status || '-'}
+                  </div>
+                  {healthMessage && <div style={{ fontSize: '12px', color: '#333', marginTop: '4px' }}>{healthMessage}</div>}
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleRunHealth}
+                  disabled={healthLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RefreshCcw size={14} />
+                  {healthLoading ? 'Test ediliyor...' : 'Sistemi Test Et'}
+                </button>
+              </div>
+              {healthReport && (
+                <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {healthReport.items.map(item => (
+                    <div key={item.key} style={{
+                      border: '1px solid #eee',
+                      padding: '8px 10px',
+                      borderRadius: '4px',
+                      background: item.status === 'fail' ? '#ffe6e6' : item.status === 'warn' ? '#fff6e5' : '#f0fff4',
+                      color: '#333',
+                      fontSize: '12px',
+                      minWidth: '160px'
+                    }}>
+                      <div style={{ fontWeight: 700 }}>{item.message}</div>
+                      {item.detail && <div style={{ marginTop: '4px', color: '#666' }}>{item.detail}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Kullanıcı Formu */}
@@ -278,6 +403,29 @@ export default function AdminPanel() {
                 </h3>
                 <form onSubmit={handleUserSubmit}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                        Hesap Türü
+                      </label>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            checked={userFormData.accountType === 'existing'}
+                            onChange={() => setUserFormData({ ...userFormData, accountType: 'existing' })}
+                          />
+                          <span>Var olan şirkete kullanıcı ekle</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            checked={userFormData.accountType === 'new'}
+                            onChange={() => setUserFormData({ ...userFormData, accountType: 'new', role: 'manager' })}
+                          />
+                          <span>Yeni şirket oluştur ve yönetici aç</span>
+                        </label>
+                      </div>
+                    </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
                         Kullanıcı Adı <span style={{ color: '#dc3545' }}>*</span>
@@ -351,28 +499,6 @@ export default function AdminPanel() {
                     </div>
                     <div>
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
-                        Şirket Kodu <span style={{ color: '#dc3545' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={userFormData.companyCode}
-                        onChange={(e) => setUserFormData({ ...userFormData, companyCode: e.target.value })}
-                        placeholder="Örn: ABC123"
-                        required
-                        style={{
-                          width: '100%',
-                          padding: '12px',
-                          border: '2px solid #000',
-                          borderRadius: '0',
-                          fontSize: '14px'
-                        }}
-                      />
-                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
-                        Var olan firma kodunu girin. Kod bulunamazsa ekleme yapılmaz.
-                      </p>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
                         Rol
                       </label>
                       <select
@@ -386,34 +512,117 @@ export default function AdminPanel() {
                           fontSize: '14px',
                           background: 'white'
                         }}
+                        disabled={userFormData.accountType === 'new'}
                       >
                         <option value="user">Kullanıcı</option>
                         <option value="manager">Yönetici</option>
                       </select>
+                      {userFormData.accountType === 'new' && (
+                        <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
+                          Yeni şirket açarken rol otomatik olarak yönetici olur.
+                        </p>
+                      )}
                     </div>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
-                        Rol
-                      </label>
-                      <input
-                        type="text"
-                        value="Yönetici (Manager)"
-                        disabled
-                        style={{
-                          width: '100%',
-                          padding: '12px',
-                          border: '2px solid #ccc',
-                          borderRadius: '0',
-                          fontSize: '14px',
-                          background: '#f5f5f5',
-                          color: '#666',
-                          cursor: 'not-allowed'
-                        }}
-                      />
-                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
-                        Admin Panel'den şirket yöneticisi (manager) oluşturulur
-                      </p>
-                    </div>
+                    {userFormData.accountType === 'existing' && (
+                      <>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                            Şirket Seç <span style={{ color: '#dc3545' }}>*</span>
+                          </label>
+                          <select
+                            value={userFormData.companyId}
+                            onChange={(e) => {
+                              const company = companies.find(c => c.id === e.target.value);
+                              setUserFormData({
+                                ...userFormData,
+                                companyId: e.target.value,
+                                companyCode: company?.code || '',
+                                companyName: company?.name || ''
+                              });
+                            }}
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #000',
+                              borderRadius: '0',
+                              fontSize: '14px',
+                              background: 'white'
+                            }}
+                          >
+                            <option value="">Seçiniz</option>
+                            {companies.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>
+                            ))}
+                          </select>
+                          <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
+                            Var olan şirket seçilmeden hesap oluşturulamaz.
+                          </p>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                            Şirket Kodu
+                          </label>
+                          <input
+                            type="text"
+                            value={userFormData.companyCode}
+                            readOnly
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #000',
+                              borderRadius: '0',
+                              fontSize: '14px',
+                              background: '#f8f9fa'
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                    {userFormData.accountType === 'new' && (
+                      <>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                            Yeni Şirket Adı <span style={{ color: '#dc3545' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={userFormData.companyName}
+                            onChange={(e) => setUserFormData({ ...userFormData, companyName: e.target.value })}
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #000',
+                              borderRadius: '0',
+                              fontSize: '14px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                            Yeni Şirket Kodu <span style={{ color: '#dc3545' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={userFormData.companyCode}
+                            onChange={(e) => setUserFormData({ ...userFormData, companyCode: e.target.value })}
+                            placeholder="Örn: ABC123"
+                            required
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              border: '2px solid #000',
+                              borderRadius: '0',
+                              fontSize: '14px'
+                            }}
+                          />
+                          <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
+                            Önce şirketi oluşturur, ardından yöneticiyi açar.
+                          </p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
                         <input
@@ -483,6 +692,8 @@ export default function AdminPanel() {
                       <th>Email</th>
                       <th>Şirket</th>
                       <th>Rol</th>
+                      <th>Hash</th>
+                      <th>Parola</th>
                       <th>Oluşturan</th>
                       <th>Durum</th>
                       <th>Son Giriş</th>
@@ -512,6 +723,42 @@ export default function AdminPanel() {
                           }}>
                             {user.role === 'admin' ? 'Admin' : user.role === 'manager' ? 'Yönetici' : 'Kullanıcı'}
                           </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '12px', color: '#333', fontFamily: 'monospace' }}>
+                              {showHash[user.id || ''] ? (user.password || '-') : '•••'}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '2px 6px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              onClick={() => setShowHash({ ...showHash, [user.id || '']: !showHash[user.id || ''] })}
+                            >
+                              {showHash[user.id || ''] ? <EyeOff size={12} /> : <Eye size={12} />}
+                              {showHash[user.id || ''] ? 'Gizle' : 'Göster'}
+                            </button>
+                            {showHash[user.id || ''] && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '2px 6px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                onClick={() => navigator.clipboard.writeText(user.password || '')}
+                              >
+                                <Copy size={12} /> Kopyala
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '6px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            onClick={() => handleResetPassword(user)}
+                          >
+                            <KeyRound size={12} /> Sıfırla
+                          </button>
                         </td>
                         <td>
                           {user.createdBy ? (

@@ -39,6 +39,7 @@ import SalesInvoices from './pages/SalesInvoices';
 import Signup from './pages/Signup';
 import InviteAdmin from './pages/InviteAdmin';
 import About from './pages/About';
+import AIAssistantPage from './pages/AIAssistant';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -222,6 +223,10 @@ function App() {
         <Route 
           path="/settings" 
           element={isAuthenticated() ? <SettingsPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-assistant" 
+          element={isAuthenticated() ? <AIAssistantPage /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/sales-invoices" 

@@ -691,7 +691,11 @@ export default function StockEntry() {
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.id}>
-                    <td>{entry.arrivalDate.toLocaleDateString('tr-TR')}</td>
+                    <td>
+                      {entry.arrivalDate
+                        ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR')
+                        : '-'}
+                    </td>
                     <td>{entry.materialName}</td>
                     <td>{entry.category}</td>
                     <td>{entry.unit}</td>

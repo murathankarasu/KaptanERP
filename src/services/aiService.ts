@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 
-// OpenAI client - ucuz model kullanımı için gpt-3.5-turbo
+// OpenAI client - ucuz model kullanımı için gpt-4o-mini
 // VITE_OPENAI_API_KEY veya VITE_GPT_API_KEY kullanılabilir
 const apiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.VITE_GPT_API_KEY;
 
@@ -29,6 +29,10 @@ export interface AIDailyReport {
   highlights: string[];
   warnings: string[];
   recommendations: string[];
+}
+
+export interface AINaturalAnswer {
+  answer: string;
 }
 
 // Excel formatını AI ile düzeltme
@@ -64,7 +68,7 @@ Lütfen:
 Sadece JSON döndür, açıklama yapma.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -100,6 +104,53 @@ Sadece JSON döndür, açıklama yapma.`;
     return {
       success: false,
       error: error.message || 'AI servisi hatası'
+    };
+  }
+};
+
+// Genel ERP asistanı - doğal dilde soru-cevap
+export const askERPAI = async (question: string, context: any): Promise<AINaturalAnswer> => {
+  try {
+    if (!apiKey || apiKey === 'your_openai_api_key_here') {
+      return {
+        answer: 'AI yanıtı üretilemedi: API anahtarı bulunamadı.'
+      };
+    }
+
+    const trimmed = question.trim();
+    if (!trimmed) {
+      return { answer: 'Lütfen bir soru yazın.' };
+    }
+
+    const prompt = `Aşağıda bir KOBİ için ERP sisteminden özet veriler var. Kullanıcı Türkçe bir soru soruyor.
+Sen de bu verileri kullanarak kısa, net, maddelemeli bir cevap ver.
+
+Veri Özeti (JSON):
+${JSON.stringify(context).slice(0, 5000)}
+
+Soru: "${trimmed}"
+
+Cevabını sade Türkçe ile ver, teknik detay boğma.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'Sen KOBİ odaklı bir ERP asistanısın. Stok, sipariş, müşteri ve personel verilerini yorumlayıp kısa Türkçe cevaplar verirsin.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.4,
+      max_tokens: 800
+    });
+
+    const response = completion.choices[0]?.message?.content || '';
+    return { answer: response.trim() };
+  } catch (error: any) {
+    console.error('AI doğal soru-cevap hatası:', error);
+    return {
+      answer: 'Cevap oluşturulurken bir hata oluştu: ' + (error.message || error)
     };
   }
 };
@@ -152,7 +203,7 @@ Lütfen şu formatta JSON döndür:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -257,7 +308,7 @@ Lütfen şu formatta JSON döndür:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',

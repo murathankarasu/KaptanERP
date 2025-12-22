@@ -37,14 +37,33 @@ export interface Customer {
 
 const collectionName = 'customers';
 
+// Firestore payload temizleyici: undefined alanları ve boş alt objeleri kaldırır
+const cleanPayload = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy: any = Array.isArray(obj) ? [...obj] : { ...obj };
+  Object.keys(copy).forEach((key) => {
+    const value = copy[key];
+    if (value === undefined) {
+      delete copy[key];
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      copy[key] = cleanPayload(value);
+      if (copy[key] && typeof copy[key] === 'object' && Object.keys(copy[key]).length === 0) {
+        delete copy[key];
+      }
+    }
+  });
+  return copy;
+};
+
 export const addCustomer = async (customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, collectionName), {
+    const payload = cleanPayload({
       ...customer,
       balance: customer.balance || 0,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
     });
+    const docRef = await addDoc(collection(db, collectionName), payload);
     return docRef.id;
   } catch (error) {
     console.error('Müşteri eklenirken hata:', error);
@@ -62,13 +81,16 @@ export const getCustomers = async (companyId?: string): Promise<Customer[]> => {
     }
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      balance: doc.data().balance || 0,
-      createdAt: doc.data().createdAt?.toDate(),
-      updatedAt: doc.data().updatedAt?.toDate()
-    })) as Customer[];
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data() as any;
+      return {
+        id: doc.id,
+        ...data,
+        balance: data.balance || 0,
+        createdAt: data.createdAt?.toDate?.() ?? data.createdAt,
+        updatedAt: data.updatedAt?.toDate?.() ?? data.updatedAt
+      } as Customer;
+    });
   } catch (error) {
     console.error('Müşteri listesi yüklenirken hata:', error);
     throw error;
@@ -78,10 +100,11 @@ export const getCustomers = async (companyId?: string): Promise<Customer[]> => {
 export const updateCustomer = async (id: string, customer: Partial<Customer>): Promise<void> => {
   try {
     const docRef = doc(db, collectionName, id);
-    await updateDoc(docRef, {
+    const payload = cleanPayload({
       ...customer,
       updatedAt: Timestamp.now()
     });
+    await updateDoc(docRef, payload);
   } catch (error) {
     console.error('Müşteri güncellenirken hata:', error);
     throw error;

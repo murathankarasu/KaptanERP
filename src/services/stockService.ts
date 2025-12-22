@@ -69,15 +69,34 @@ export interface StockStatus {
   companyId?: string; // Şirket ID'si
 }
 
+// Firestore'a giderken undefined alanları ve boş objeleri temizle
+const cleanPayload = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy: any = Array.isArray(obj) ? [...obj] : { ...obj };
+  Object.keys(copy).forEach((key) => {
+    const value = copy[key];
+    if (value === undefined) {
+      delete copy[key];
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      copy[key] = cleanPayload(value);
+      if (copy[key] && typeof copy[key] === 'object' && Object.keys(copy[key]).length === 0) {
+        delete copy[key];
+      }
+    }
+  });
+  return copy;
+};
+
 // Stok Giriş Ekleme
 export const addStockEntry = async (entry: StockEntry): Promise<string> => {
   try {
-    const docRef = await addDoc(collection(db, 'stockEntries'), {
+    const payload = cleanPayload({
       ...entry,
       arrivalDate: Timestamp.fromDate(entry.arrivalDate),
       expiryDate: entry.expiryDate ? Timestamp.fromDate(entry.expiryDate) : undefined,
       createdAt: Timestamp.now()
     });
+    const docRef = await addDoc(collection(db, 'stockEntries'), payload);
     return docRef.id;
   } catch (error) {
     console.error('Stok girişi ekleme hatası:', error);
@@ -115,11 +134,11 @@ export const getStockEntries = async (filters?: {
     const querySnapshot = await getDocs(q);
     const entries: StockEntry[] = [];
     
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data: any = docSnap.data();
       const entry: StockEntry = {
-        id: doc.id,
-        arrivalDate: data.arrivalDate.toDate(),
+        id: docSnap.id,
+        arrivalDate: data.arrivalDate?.toDate?.() ?? data.arrivalDate,
         sku: data.sku,
         materialName: data.materialName,
         category: data.category,
@@ -136,7 +155,7 @@ export const getStockEntries = async (filters?: {
         expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : undefined,
         note: data.note,
         companyId: data.companyId,
-        createdAt: data.createdAt?.toDate()
+        createdAt: data.createdAt?.toDate?.() ?? data.createdAt
       };
       
       // Tarih filtreleme (client-side)
@@ -169,12 +188,13 @@ export const addStockOutput = async (output: StockOutput): Promise<string> => {
     }
     
     // Çıkış kaydını ekle
-    const docRef = await addDoc(collection(db, 'stockOutputs'), {
+    const payload = cleanPayload({
       ...output,
       issueDate: Timestamp.fromDate(output.issueDate),
       expiryDate: output.expiryDate ? Timestamp.fromDate(output.expiryDate) : undefined,
       createdAt: Timestamp.now()
     });
+    const docRef = await addDoc(collection(db, 'stockOutputs'), payload);
     
     // Stok durumunu güncelle (materialName + warehouse + companyId ile)
     await updateStockStatus(output.materialName, -output.quantity, output.companyId, output.warehouse);
@@ -216,11 +236,11 @@ export const getStockOutputs = async (filters?: {
     const querySnapshot = await getDocs(q);
     const outputs: StockOutput[] = [];
     
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
+    querySnapshot.forEach((docSnap) => {
+      const data: any = docSnap.data();
       const output: StockOutput = {
-        id: doc.id,
-        issueDate: data.issueDate.toDate(),
+        id: docSnap.id,
+        issueDate: data.issueDate?.toDate?.() ?? data.issueDate,
         sku: data.sku,
         employee: data.employee,
         department: data.department,
@@ -235,7 +255,7 @@ export const getStockOutputs = async (filters?: {
         warehouse: data.warehouse,
         description: data.description,
         companyId: data.companyId,
-        createdAt: data.createdAt?.toDate()
+        createdAt: data.createdAt?.toDate?.() ?? data.createdAt
       };
       
       // Tarih filtreleme (client-side)
@@ -421,7 +441,7 @@ export const updateStockStatusOnEntry = async (
         companyId
       };
       
-      await addDoc(collection(db, 'stockStatus'), newStatus);
+      await addDoc(collection(db, 'stockStatus'), cleanPayload(newStatus));
     }
   } catch (error) {
     console.error('Stok durumu güncelleme hatası:', error);

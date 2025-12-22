@@ -192,7 +192,7 @@ export const ensurePersonnelForUser = async (user: User): Promise<User> => {
   }
 };
 
-export const getUsers = async (companyId?: string): Promise<User[]> => {
+export const getUsers = async (companyId?: string, includeHash = false): Promise<User[]> => {
   try {
     let q;
     if (companyId) {
@@ -204,7 +204,7 @@ export const getUsers = async (companyId?: string): Promise<User[]> => {
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      password: '***', // Şifreyi gizle
+      password: includeHash ? (doc.data().password || '') : '***', // Varsayılan gizle
       createdAt: doc.data().createdAt?.toDate(),
       updatedAt: doc.data().updatedAt?.toDate(),
       lastLogin: doc.data().lastLogin?.toDate()
@@ -375,14 +375,20 @@ export const deleteUser = async (id: string): Promise<void> => {
 // Hata Logları
 export const addErrorLog = async (error: string, page?: string, userId?: string, username?: string): Promise<void> => {
   try {
-    await addDoc(collection(db, errorLogsCollection), {
+    const payload: any = {
       error,
       page,
       userId,
       username,
       timestamp: Timestamp.now(),
       resolved: false
+    };
+    Object.keys(payload).forEach((key) => {
+      if (payload[key] === undefined) {
+        delete payload[key];
+      }
     });
+    await addDoc(collection(db, errorLogsCollection), payload);
   } catch (error) {
     console.error('Hata logu eklenirken hata:', error);
   }

@@ -85,10 +85,19 @@ export const getPersonnel = async (filters?: {
 export const updatePersonnel = async (id: string, personnel: Partial<Personnel>): Promise<void> => {
   try {
     const docRef = doc(db, collectionName, id);
-    await updateDoc(docRef, {
+    const payload = {
       ...personnel,
       updatedAt: Timestamp.now()
+    };
+
+    // Firestore updateDoc undefined alanları kabul etmiyor, temizle
+    Object.keys(payload).forEach((key) => {
+      if (payload[key as keyof typeof payload] === undefined) {
+        delete payload[key as keyof typeof payload];
+      }
     });
+
+    await updateDoc(docRef, payload);
   } catch (error) {
     console.error('Personel güncellenirken hata:', error);
     throw error;
