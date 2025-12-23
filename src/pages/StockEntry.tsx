@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { addStockEntry, getStockEntries, StockEntry as StockEntryType, updateStockStatusOnEntry } from '../services/stockService';
 import { getWarehouses } from '../services/warehouseService';
@@ -12,6 +13,7 @@ import AIFormatFixModal from '../components/AIFormatFixModal';
 import { Download, Plus, X, Upload } from 'lucide-react';
 
 export default function StockEntry() {
+  const location = useLocation();
   const [entries, setEntries] = useState<StockEntryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -53,6 +55,25 @@ export default function StockEntry() {
     loadEntries();
     loadWarehouses();
   }, [filters]);
+
+  // Stok kartından gelen ön-dolum (query parametreleri)
+  useEffect(() => {
+    if (!location.search) return;
+    const params = new URLSearchParams(location.search);
+    const hasPrefill = ['sku', 'materialName', 'category', 'unit', 'baseUnit', 'variant'].some(k => params.get(k));
+    if (!hasPrefill) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      sku: params.get('sku') || prev.sku,
+      materialName: params.get('materialName') || prev.materialName,
+      category: params.get('category') || prev.category,
+      unit: params.get('unit') || prev.unit,
+      baseUnit: params.get('baseUnit') || prev.baseUnit,
+      variant: params.get('variant') || prev.variant
+    }));
+    setShowForm(true);
+  }, [location.search]);
 
   const loadWarehouses = async () => {
     try {

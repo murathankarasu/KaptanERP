@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { addProduct, getProducts, updateProduct, deleteProduct, Product, UnitConversion } from '../services/productService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
@@ -19,6 +20,7 @@ const emptyForm = {
 };
 
 export default function ProductManagement() {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -127,6 +129,18 @@ export default function ProductManagement() {
 
   const removeConversion = (idx: number) => {
     setForm({ ...form, conversions: form.conversions.filter((_, i) => i !== idx) });
+  };
+
+  const goToStockEntry = (p: Product) => {
+    const params = new URLSearchParams({
+      sku: p.sku || '',
+      materialName: p.name || '',
+      category: p.category || '',
+      unit: p.baseUnit || '',
+      baseUnit: p.baseUnit || '',
+      variant: p.variant ? [p.variant.color, p.variant.size].filter(Boolean).join(' ') : ''
+    });
+    navigate(`/stock-entry?${params.toString()}`);
   };
 
   return (
@@ -244,6 +258,9 @@ export default function ProductManagement() {
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => handleEdit(p)}>
                         <Edit size={14} /> Düzenle
                       </button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => goToStockEntry(p)}>
+                      Stok Girişi
+                    </button>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px', color: '#dc3545' }} onClick={() => p.id && handleDelete(p.id)}>
                         <Trash2 size={14} /> Sil
                       </button>
