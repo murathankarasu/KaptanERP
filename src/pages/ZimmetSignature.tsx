@@ -39,12 +39,14 @@ export default function ZimmetSignature() {
 
       if (outputSnap.exists()) {
         const data = outputSnap.data();
+        const issueDate =
+          data.issueDate?.toDate?.() ? data.issueDate.toDate() : new Date(data.issueDate);
         setZimmetData({
           employee: data.employee,
           department: data.department,
           materialName: data.materialName,
           quantity: data.quantity,
-          issueDate: data.issueDate.toDate(),
+          issueDate,
           returnDate: data.returnDate || '',
           employeeSignature: data.employeeSignature || '',
           authorizedSignature: data.authorizedSignature || ''
