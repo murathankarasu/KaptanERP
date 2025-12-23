@@ -345,13 +345,6 @@ export default function Layout({ children }: LayoutProps) {
         'Stok analizi ve günlük özet raporları.'
       ]
     },
-    '/stock-entry': {
-      title: 'Stok Giriş',
-      items: [
-        'Depoya giriş: miktar, birim, SKT/lot opsiyonel.',
-        'Kritik seviye bilgisi için stok durumu güncellenir.'
-      ]
-    },
     '/stock-output': {
       title: 'Personel Çıkış',
       items: [
