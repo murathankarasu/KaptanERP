@@ -1,10 +1,23 @@
 import jsPDF from 'jspdf';
+import { notoSansBold, notoSansRegular } from './pdfFonts';
+
+const registerPdfFonts = (doc: jsPDF) => {
+  doc.addFileToVFS('NotoSans-Regular.ttf', notoSansRegular);
+  doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
+  doc.addFileToVFS('NotoSans-Bold.ttf', notoSansBold);
+  doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
+  doc.setFont('NotoSans', 'normal');
+};
 
 export interface InvoicePdfInput {
   invoiceNumber: string;
   issueDate: string;
   customerName: string;
   customerVknTckn: string;
+  sellerName?: string;
+  sellerTaxNumber?: string;
+  sellerAddress?: string;
+  sellerPhone?: string;
   lines: {
     name: string;
     qty: number;
@@ -26,6 +39,7 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
     putOnlyUsedFonts: true,
     floatPrecision: 16
   });
+  registerPdfFonts(doc);
   
   // UTF-8 desteği için encoding ayarı
   doc.setProperties({
@@ -44,36 +58,48 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   doc.setFillColor(240, 240, 240);
   doc.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
   doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('FATURA', pageWidth / 2, yPos + 16, { align: 'center' });
   yPos += 35;
 
   // Fatura bilgileri (sağ üst)
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(100, 100, 100);
   const infoX = pageWidth - margin - 50;
   doc.text('Fatura No:', infoX, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(input.invoiceNumber, infoX + 25, yPos);
   yPos += 6;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(100, 100, 100);
   doc.text('Tarih:', infoX, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   const dateObj = new Date(input.issueDate);
-  doc.text(dateObj.toLocaleDateString('tr-TR'), infoX + 25, yPos);
+  doc.text(
+    (dateObj as any)?.toDate?.()
+      ? (dateObj as any).toDate().toLocaleDateString('tr-TR')
+      : new Date(dateObj as any).toLocaleDateString('tr-TR'),
+    infoX + 25,
+    yPos
+  );
   yPos += 6;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(100, 100, 100);
   doc.text('Para Birimi:', infoX, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(input.currency, infoX + 25, yPos);
   yPos += 15;
+
+  const formatShortText = (value: string | undefined, fallback: string, maxLen: number) => {
+    const safeValue = (value || '').trim();
+    const base = safeValue.length > 0 ? safeValue : fallback;
+    return base.length > maxLen ? base.substring(0, maxLen - 3) + '...' : base;
+  };
 
   // Şirket bilgileri kutusu (sol)
   const companyBoxY = yPos;
@@ -85,20 +111,18 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   doc.rect(margin, companyBoxY, boxWidth, 40, 'D');
   
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   // SATICI başlığını ortala
   const saticiText = 'SATICI';
   doc.text(saticiText, margin + boxWidth / 2, companyBoxY + 8, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(10);
-  // Türkçe karakterler - jsPDF UTF-8 destekliyor ancak helvetica fontu Türkçe karakterleri desteklemiyor
-  // Bu yüzden karakterleri ASCII karşılıklarına çeviriyoruz veya UTF-8 encoding kullanıyoruz
-  // Helvetica fontu Türkçe karakterleri desteklemiyor
-  doc.text('Sirket Adi', margin + 8, companyBoxY + 15);
-  doc.text('Vergi No', margin + 8, companyBoxY + 22);
-  doc.text('Adres', margin + 8, companyBoxY + 29);
-  doc.text('Telefon', margin + 8, companyBoxY + 36);
+  // Türkçe karakterler için NotoSans kullanıyoruz.
+  doc.text(formatShortText(input.sellerName, 'Sirket Adi', 28), margin + 8, companyBoxY + 15);
+  doc.text(formatShortText(input.sellerTaxNumber, 'Vergi No', 28), margin + 8, companyBoxY + 22);
+  doc.text(formatShortText(input.sellerAddress, 'Adres', 28), margin + 8, companyBoxY + 29);
+  doc.text(formatShortText(input.sellerPhone, 'Telefon', 28), margin + 8, companyBoxY + 36);
 
   // Müşteri bilgileri kutusu (sağ)
   const customerBoxX = margin + boxWidth + margin;
@@ -108,11 +132,11 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   doc.rect(customerBoxX, companyBoxY, boxWidth, 40, 'D');
   
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   // ALICI başlığını ortala
   const aliciText = 'ALICI';
   doc.text(aliciText, customerBoxX + boxWidth / 2, companyBoxY + 8, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(10);
   // Müşteri adını kısalt (uzunsa)
   const customerName = (input.customerName || '').length > 25 
@@ -126,8 +150,8 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   yPos += 5;
   doc.setFillColor(60, 60, 60);
   doc.rect(margin, yPos, pageWidth - 2 * margin, 10, 'F');
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(255, 255, 255);
   
   // Tablo kolon genişlikleri - sayfaya sığacak şekilde optimize edildi
@@ -159,38 +183,38 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   
   // Başlıklar - her kolon için doğru pozisyon ve padding
   let xPos = margin + 3;
-  doc.text('#', xPos, yPos + 7);
+  doc.text('#', xPos, yPos + 6);
   xPos += colWidths.no + colPadding;
   
-  doc.text('Aciklama', xPos, yPos + 7);
+  doc.text('Aciklama', xPos, yPos + 6);
   xPos += colWidths.name + colPadding;
   
-  doc.text('Miktar', xPos + colWidths.qty, yPos + 7, { align: 'right' });
+  doc.text('Miktar', xPos + colWidths.qty, yPos + 6, { align: 'right' });
   xPos += colWidths.qty + colPadding;
   
-  doc.text('Birim', xPos, yPos + 7);
+  doc.text('Birim', xPos, yPos + 6);
   xPos += colWidths.unit + colPadding;
   
-  doc.text('Birim Fiyat', xPos + colWidths.unitPrice, yPos + 7, { align: 'right' });
+  doc.text('B.Fiyat', xPos + colWidths.unitPrice, yPos + 6, { align: 'right' });
   xPos += colWidths.unitPrice + colPadding;
   
-  doc.text('Iskonto', xPos + colWidths.discount, yPos + 7, { align: 'right' });
+  doc.text('Isk.', xPos + colWidths.discount, yPos + 6, { align: 'right' });
   xPos += colWidths.discount + colPadding;
   
-  doc.text('KDV %', xPos + colWidths.vatRate, yPos + 7, { align: 'right' });
+  doc.text('KDV %', xPos + colWidths.vatRate, yPos + 6, { align: 'right' });
   xPos += colWidths.vatRate + colPadding;
   
-  doc.text('Net Tutar', xPos + colWidths.net, yPos + 7, { align: 'right' });
+  doc.text('Net', xPos + colWidths.net, yPos + 6, { align: 'right' });
   xPos += colWidths.net + colPadding;
   
-  doc.text('KDV', xPos + colWidths.vat, yPos + 7, { align: 'right' });
+  doc.text('KDV', xPos + colWidths.vat, yPos + 6, { align: 'right' });
   xPos += colWidths.vat + colPadding;
   
-  doc.text('Toplam', xPos + colWidths.total, yPos + 7, { align: 'right' });
+  doc.text('Toplam', xPos + colWidths.total, yPos + 6, { align: 'right' });
   
   yPos += 12;
   doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(9);
 
   // Kalemler
@@ -276,31 +300,26 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   doc.line(margin, yPos, pageWidth - margin, yPos);
   yPos += 8;
 
-  // Toplamlar - doğru pozisyonlama
+  // Toplamlar - sağ blok, taşmayı önlemek için ayrı satırlar
+  const totalsValueX = pageWidth - margin;
+  const totalsLabelX = totalsValueX - 60;
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  const totalsStartX = margin + 3 + colWidths.no + colPadding + colWidths.name + colPadding + colWidths.qty + colPadding + colWidths.unit + colPadding + colWidths.unitPrice + colPadding + colWidths.discount + colPadding + colWidths.vatRate + colPadding;
-  xPos = totalsStartX;
-  doc.text('ARA TOPLAM:', xPos, yPos);
-  xPos += colWidths.net + colPadding;
-  doc.text(totalNet.toFixed(2), xPos + colWidths.net, yPos, { align: 'right' });
-  xPos += colWidths.net + colPadding;
-  doc.text(totalVat.toFixed(2), xPos + colWidths.vat, yPos, { align: 'right' });
-  xPos += colWidths.vat + colPadding;
-  doc.text(totalGross.toFixed(2), xPos + colWidths.total, yPos, { align: 'right' });
-  
-  yPos += 8;
+  doc.setFont('NotoSans', 'bold');
+  doc.text('ARA TOPLAM:', totalsLabelX, yPos);
+  doc.text(totalNet.toFixed(2), totalsValueX, yPos, { align: 'right' });
+  yPos += 6;
+  doc.text('KDV TOPLAM:', totalsLabelX, yPos);
+  doc.text(totalVat.toFixed(2), totalsValueX, yPos, { align: 'right' });
+  yPos += 6;
   doc.setFontSize(12);
-  xPos = totalsStartX;
-  doc.text('GENEL TOPLAM:', xPos, yPos);
-  xPos += colWidths.net + colPadding + colWidths.vat + colPadding;
-  doc.setFontSize(14);
-  doc.text(`${totalGross.toFixed(2)} ${input.currency}`, xPos + colWidths.total, yPos, { align: 'right' });
+  doc.text('GENEL TOPLAM:', totalsLabelX, yPos);
+  doc.setFontSize(12);
+  doc.text(`${totalGross.toFixed(2)} ${input.currency}`, totalsValueX, yPos, { align: 'right' });
 
   // Alt not
   yPos = pageHeight - 20;
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(150, 150, 150);
   doc.text('Bu belge elektronik ortamda olusturulmustur. GIB entegrasyonu yoktur.', pageWidth / 2, yPos, { align: 'center' });
 
@@ -323,6 +342,7 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
     format: 'a4',
     compress: true
   });
+  registerPdfFonts(doc);
   
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -333,28 +353,34 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   doc.setFillColor(240, 240, 240);
   doc.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
   doc.setFontSize(24);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text('E-İRSALİYE', pageWidth / 2, yPos + 16, { align: 'center' });
   yPos += 35;
 
   // İrsaliye bilgileri (sağ üst)
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(100, 100, 100);
   const infoX = pageWidth - margin - 50;
   doc.text('İrsaliye No:', infoX, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(input.despatchNumber, infoX + 25, yPos);
   yPos += 6;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(100, 100, 100);
   doc.text('Tarih:', infoX, yPos);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   const dateObj = new Date(input.issueDate);
-  doc.text(dateObj.toLocaleDateString('tr-TR'), infoX + 25, yPos);
+  doc.text(
+    (dateObj as any)?.toDate?.()
+      ? (dateObj as any).toDate().toLocaleDateString('tr-TR')
+      : new Date(dateObj as any).toLocaleDateString('tr-TR'),
+    infoX + 25,
+    yPos
+  );
   yPos += 15;
 
   // Gönderen bilgileri kutusu (sol)
@@ -367,14 +393,14 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   doc.rect(margin, senderBoxY, boxWidth, 40, 'D');
   
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(0, 0, 0);
   // GÖNDEREN başlığını ortala
   const gonderText = 'GÖNDEREN';
   doc.text(gonderText, margin + boxWidth / 2, senderBoxY + 8, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(10);
-  // Helvetica fontu Türkçe karakterleri desteklemiyor
+  // Türkçe karakterler için NotoSans kullanıyoruz.
   doc.text('Sirket Adi', margin + 8, senderBoxY + 15);
   doc.text('Vergi No', margin + 8, senderBoxY + 22);
   doc.text('Adres', margin + 8, senderBoxY + 29);
@@ -388,11 +414,11 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   doc.rect(receiverBoxX, senderBoxY, boxWidth, 40, 'D');
   
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   // ALICI başlığını ortala
   const aliciText = 'ALICI';
   doc.text(aliciText, receiverBoxX + boxWidth / 2, senderBoxY + 8, { align: 'center' });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(10);
   // Alıcı adını kısalt (uzunsa)
   const customerName = (input.customerName || '').length > 25 
@@ -407,7 +433,7 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   doc.setFillColor(60, 60, 60);
   doc.rect(margin, yPos, pageWidth - 2 * margin, 10, 'F');
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   doc.setTextColor(255, 255, 255);
   
   const colPadding = 2;
@@ -440,7 +466,7 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   
   yPos += 12;
   doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setFontSize(10);
 
   // Kalemler
@@ -485,7 +511,7 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   // Toplam miktar
   const totalQty = input.items.reduce((sum, item) => sum + item.qty, 0);
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('NotoSans', 'bold');
   xPos = margin + colWidths.no + colWidths.name;
   doc.text('TOPLAM:', xPos, yPos);
   xPos += colWidths.qty;
@@ -494,11 +520,10 @@ export const generateDespatchPDF = (input: DespatchPdfInput) => {
   // Alt not
   yPos = pageHeight - 20;
   doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('NotoSans', 'normal');
   doc.setTextColor(150, 150, 150);
   doc.text('Bu belge elektronik ortamda olusturulmustur. GIB entegrasyonu yoktur.', pageWidth / 2, yPos, { align: 'center' });
 
   // PDF'i kaydet
   doc.save(`irsaliye_${input.despatchNumber}.pdf`);
 };
-

@@ -294,7 +294,7 @@ export default function JournalEntries() {
                   const debit = entry.lines?.filter((l: any) => l.side === 'debit').reduce((s: number, l: any) => s + l.amount, 0) || 0;
                   return (
                     <tr key={entry.id}>
-                      <td>{new Date(entry.date).toLocaleDateString('tr-TR')}</td>
+                      <td>{entry.date ? new Date(entry.date as any).toLocaleDateString('tr-TR') : ''}</td>
                       <td>{entry.description}</td>
                       <td>{debit.toFixed(2)}</td>
                       <td>

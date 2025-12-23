@@ -8,6 +8,7 @@ export interface CurrentUser {
   role?: 'admin' | 'manager' | 'user';
   companyId?: string;
   companyCode?: string;
+  companyName?: string;
   personnelId?: string;
   permissions?: PermissionType[];
 }
@@ -27,4 +28,3 @@ export const getCurrentUser = (): CurrentUser | null => {
     return null;
   }
 };
-

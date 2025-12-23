@@ -84,7 +84,7 @@ export const getCustomers = async (companyId?: string): Promise<Customer[]> => {
     return querySnapshot.docs.map(doc => {
       const data = doc.data() as any;
       return {
-        id: doc.id,
+      id: doc.id,
         ...data,
         balance: data.balance || 0,
         createdAt: data.createdAt?.toDate?.() ?? data.createdAt,

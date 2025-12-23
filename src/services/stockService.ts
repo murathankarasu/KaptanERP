@@ -158,15 +158,19 @@ export const getStockEntries = async (filters?: {
         createdAt: data.createdAt?.toDate?.() ?? data.createdAt
       };
       
-      // Tarih filtreleme (client-side)
-      if (filters?.startDate && entry.arrivalDate < filters.startDate) {
-        return;
-      }
-      if (filters?.endDate && entry.arrivalDate > filters.endDate) {
-        return;
-      }
-      
-      entries.push(entry);
+    // Tarih filtreleme (client-side)
+    if (filters?.startDate) {
+      const start = new Date(filters.startDate);
+      start.setHours(0, 0, 0, 0);
+      if (entry.arrivalDate < start) return;
+    }
+    if (filters?.endDate) {
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (entry.arrivalDate > end) return;
+    }
+    
+    entries.push(entry);
     });
     
     return entries;
@@ -258,15 +262,19 @@ export const getStockOutputs = async (filters?: {
         createdAt: data.createdAt?.toDate?.() ?? data.createdAt
       };
       
-      // Tarih filtreleme (client-side)
-      if (filters?.startDate && output.issueDate < filters.startDate) {
-        return;
-      }
-      if (filters?.endDate && output.issueDate > filters.endDate) {
-        return;
-      }
-      
-      outputs.push(output);
+    // Tarih filtreleme (client-side)
+    if (filters?.startDate) {
+      const start = new Date(filters.startDate);
+      start.setHours(0, 0, 0, 0);
+      if (output.issueDate < start) return;
+    }
+    if (filters?.endDate) {
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (output.issueDate > end) return;
+    }
+    
+    outputs.push(output);
     });
     
     return outputs;

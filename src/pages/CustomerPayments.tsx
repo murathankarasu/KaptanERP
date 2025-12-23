@@ -5,6 +5,7 @@ import { applyCustomerPayment, getCustomerTransactions, getCustomerAging } from 
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
 import { CreditCard, RefreshCw, Download } from 'lucide-react';
+import { formatDate } from '../utils/formatDate';
 
 interface AgingBuckets {
   bucket0_30: number;
@@ -117,7 +118,7 @@ export default function CustomerPayments() {
     }
     const XLSX = await import('xlsx');
     const data = transactions.map((tx) => ({
-      Tarih: new Date(tx.date).toLocaleDateString('tr-TR'),
+      Tarih: formatDate(tx.date),
       Tür: tx.type === 'charge' ? 'Borç' : 'Tahsilat',
       Tutar: tx.amount,
       Açıklama: tx.description || '',
@@ -302,7 +303,7 @@ export default function CustomerPayments() {
                 <tbody>
                   {transactions.map((tx) => (
                     <tr key={tx.id}>
-                      <td>{new Date(tx.date).toLocaleDateString('tr-TR')}</td>
+                      <td>{formatDate(tx.date)}</td>
                       <td>{tx.type === 'charge' ? 'Borç' : 'Tahsilat'}</td>
                       <td style={{ color: tx.amount > 0 ? '#c0392b' : '#27ae60', fontWeight: 600 }}>
                         {tx.amount.toFixed(2)} ₺

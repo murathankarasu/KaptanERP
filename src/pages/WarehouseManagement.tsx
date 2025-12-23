@@ -273,7 +273,7 @@ export default function WarehouseManagement() {
                     <td style={{ fontWeight: '500' }}>{warehouse.name}</td>
                     <td>{warehouse.location || '-'}</td>
                     <td>{warehouse.description || '-'}</td>
-                    <td>{warehouse.createdAt ? warehouse.createdAt.toLocaleDateString('tr-TR') : '-'}</td>
+                    <td>{warehouse.createdAt ? new Date(warehouse.createdAt as any).toLocaleDateString('tr-TR') : '-'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button

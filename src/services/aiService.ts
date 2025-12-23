@@ -35,6 +35,30 @@ export interface AINaturalAnswer {
   answer: string;
 }
 
+const resolveDate = (value: any): Date | null => {
+  if (!value) return null;
+  const dateValue = value?.toDate?.() ?? new Date(value);
+  if (isNaN(dateValue.getTime())) return null;
+  return dateValue;
+};
+
+const parseAIJson = (raw: string): any | null => {
+  if (!raw) return null;
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced ? fenced[1] : raw).trim();
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const objectMatch = candidate.match(/{[\s\S]*}/);
+    if (!objectMatch) return null;
+    try {
+      return JSON.parse(objectMatch[0]);
+    } catch {
+      return null;
+    }
+  }
+};
+
 // Excel formatını AI ile düzeltme
 export const fixExcelFormatWithAI = async (
   rawData: any[],
@@ -84,9 +108,9 @@ Sadece JSON döndür, açıklama yapma.`;
     });
 
     const response = completion.choices[0]?.message?.content || '';
-    
+    const fixedData = parseAIJson(response);
     try {
-      const fixedData = JSON.parse(response);
+      if (!fixedData) throw new Error('parse_failed');
       return {
         success: true,
         fixedData: Array.isArray(fixedData) ? fixedData : [fixedData],
@@ -219,9 +243,9 @@ Lütfen şu formatta JSON döndür:
     });
 
     const response = completion.choices[0]?.message?.content || '';
-    
+    const report = parseAIJson(response);
     try {
-      const report = JSON.parse(response);
+      if (!report) throw new Error('parse_failed');
       return {
         summary: report.summary || 'Rapor oluşturulamadı',
         criticalIssues: report.criticalIssues || [],
@@ -266,13 +290,13 @@ export const generateDailyAIReport = async (
 
     const today = new Date();
     const todayEntries = entries.filter(e => {
-      const entryDate = new Date(e.arrivalDate);
-      return entryDate.toDateString() === today.toDateString();
+      const entryDate = resolveDate(e.arrivalDate);
+      return entryDate ? entryDate.toDateString() === today.toDateString() : false;
     });
     
     const todayOutputs = outputs.filter(o => {
-      const outputDate = new Date(o.issueDate);
-      return outputDate.toDateString() === today.toDateString();
+      const outputDate = resolveDate(o.issueDate);
+      return outputDate ? outputDate.toDateString() === today.toDateString() : false;
     });
 
     const dataSummary = {
@@ -324,9 +348,9 @@ Lütfen şu formatta JSON döndür:
     });
 
     const response = completion.choices[0]?.message?.content || '';
-    
+    const report = parseAIJson(response);
     try {
-      const report = JSON.parse(response);
+      if (!report) throw new Error('parse_failed');
       return {
         date: dataSummary.date,
         summary: report.summary || 'Rapor oluşturulamadı',
@@ -354,4 +378,3 @@ Lütfen şu formatta JSON döndür:
     };
   }
 };
-

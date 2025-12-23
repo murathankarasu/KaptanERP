@@ -403,6 +403,8 @@ export default function ShipmentManagement() {
   const handleInvoiceFromShipment = async (shipment: Shipment) => {
     try {
       const customer = customers.find(c => c.id === shipment.customerId);
+      const currentUser = getCurrentUser();
+      const sellerName = currentUser?.companyName || currentUser?.companyCode || '';
       const invoiceNumber = `FAT-${shipment.shipmentNumber}`;
       const issueDate = shipment.shipmentDate.toISOString().split('T')[0];
       const currency = invoiceOptions.currency || 'TRY';
@@ -424,6 +426,7 @@ export default function ShipmentManagement() {
         issueDate,
         customerName: shipment.customerName,
         customerVknTckn,
+        sellerName,
         currency,
         lines
       });
@@ -1069,4 +1072,3 @@ export default function ShipmentManagement() {
     </Layout>
   );
 }
-

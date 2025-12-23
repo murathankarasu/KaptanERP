@@ -212,7 +212,7 @@ export default function PriceListManagement() {
                     <td>{r.discountPercent ? `${r.discountPercent}%` : '-'}</td>
                     <td>{r.minQuantity || '-'}</td>
                     <td>
-                      {r.startDate ? r.startDate.toLocaleDateString('tr-TR') : '-'} / {r.endDate ? r.endDate.toLocaleDateString('tr-TR') : '-'}
+                      {r.startDate ? new Date(r.startDate as any).toLocaleDateString('tr-TR') : '-'} / {r.endDate ? new Date(r.endDate as any).toLocaleDateString('tr-TR') : '-'}
                     </td>
                     <td style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => handleEdit(r)}><Edit size={12} /> Düzenle</button>

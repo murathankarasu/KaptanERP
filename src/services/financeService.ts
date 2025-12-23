@@ -81,10 +81,14 @@ export const getJournalEntries = async (params?: {
     qRef = query(qRef, where('companyId', '==', companyId));
   }
   if (startDate) {
-    qRef = query(qRef, where('date', '>=', Timestamp.fromDate(startDate)));
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    qRef = query(qRef, where('date', '>=', Timestamp.fromDate(start)));
   }
   if (endDate) {
-    qRef = query(qRef, where('date', '<=', Timestamp.fromDate(endDate)));
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    qRef = query(qRef, where('date', '<=', Timestamp.fromDate(end)));
   }
   const snapshot = await getDocs(qRef);
   const entries = snapshot.docs.slice(0, limit).map((d) => {

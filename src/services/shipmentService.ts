@@ -117,11 +117,15 @@ export const getShipments = async (filters?: {
       };
       
       // Tarih filtreleme (client-side)
-      if (filters?.startDate && shipment.shipmentDate < filters.startDate) {
-        return;
+      if (filters?.startDate) {
+        const start = new Date(filters.startDate);
+        start.setHours(0, 0, 0, 0);
+        if (shipment.shipmentDate < start) return;
       }
-      if (filters?.endDate && shipment.shipmentDate > filters.endDate) {
-        return;
+      if (filters?.endDate) {
+        const end = new Date(filters.endDate);
+        end.setHours(23, 59, 59, 999);
+        if (shipment.shipmentDate > end) return;
       }
       
       shipments.push(shipment);

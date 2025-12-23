@@ -197,7 +197,7 @@ const SettingsPage = () => {
             </p>
             <button className="btn btn-primary" onClick={exportAll} disabled={busy || !isManager}>
               <FileDown size={14} /> Tüm Verileri Excel İndir
-            </button>
+          </button>
             {!isManager && (
               <div style={{ marginTop: '6px', fontSize: '11px', color: '#999' }}>
                 Bu işlem için şirket yöneticinizle iletişime geçin.
@@ -211,8 +211,8 @@ const SettingsPage = () => {
               Bu işlem seçili şirketin ERP verilerini kalıcı olarak siler. Geri alınamaz ve sadece şirket yöneticisi tarafından yapılabilir.
             </p>
             <button className="btn btn-secondary" style={{ background: '#dc3545', borderColor: '#dc3545' }} onClick={deleteAll} disabled={busy || !isManager}>
-              <Trash2 size={14} /> Tüm Verileri Sil (Geri Alınamaz)
-            </button>
+            <Trash2 size={14} /> Tüm Verileri Sil (Geri Alınamaz)
+          </button>
             {!isManager && (
               <div style={{ marginTop: '6px', fontSize: '11px', color: '#999' }}>
                 Sadece şirket yöneticileri verileri silebilir.

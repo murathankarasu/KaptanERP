@@ -77,8 +77,8 @@ export default function GoodsReceiptManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.grnNumber || !form.receiptDate || form.items.length === 0) {
-      alert('GRN no, tarih ve kalemler zorunlu');
+    if (!form.grnNumber || !form.receiptDate || !form.warehouse || form.items.length === 0) {
+      alert('GRN no, tarih, depo ve kalemler zorunlu');
       return;
     }
     const company = getCurrentCompany();
@@ -166,8 +166,8 @@ export default function GoodsReceiptManagement() {
                   <input type="date" className="excel-form-input" value={form.receiptDate} onChange={(e) => setForm({ ...form, receiptDate: e.target.value })} required />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Depo</label>
-                  <input className="excel-form-input" value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} placeholder="Depo adı (opsiyonel)" />
+                  <label className="excel-form-label">Depo *</label>
+                  <input className="excel-form-input" value={form.warehouse} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} placeholder="Depo adı (Zorunlu)" required />
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">Durum</label>

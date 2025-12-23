@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Quote, QuoteItem, addQuote, getQuotes, updateQuote, deleteQuote } from '../services/quoteService';
+import { formatDate } from '../utils/formatDate';
 import { addOrder, Order } from '../services/orderService';
 import { getCustomers, Customer } from '../services/customerService';
 import { getPriceRules, PriceRule, selectPriceRule } from '../services/priceService';
@@ -307,7 +308,7 @@ export default function QuoteManagement() {
               {quotes.map(q => (
                 <tr key={q.id}>
                   <td>{q.quoteNumber}</td>
-                  <td>{q.quoteDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{formatDate(q.quoteDate)}</td>
                   <td>{q.customerName}</td>
                   <td>{statusText(q.status)}</td>
                 <td>{q.totalAmount.toFixed(2)} {q.currency || 'TRY'}</td>

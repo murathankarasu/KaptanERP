@@ -28,7 +28,12 @@ export const generateShipmentPDF = async (
   doc.setFont('helvetica', 'normal');
   doc.text(`Sevkiyat No: ${shipment.shipmentNumber}`, margin, yPos);
   yPos += 7;
-  doc.text(`Tarih: ${shipment.shipmentDate.toLocaleDateString('tr-TR')}`, margin, yPos);
+  const dateStr = shipment.shipmentDate
+    ? (shipment.shipmentDate as any)?.toDate?.()
+      ? (shipment.shipmentDate as any).toDate().toLocaleDateString('tr-TR')
+      : new Date(shipment.shipmentDate as any).toLocaleDateString('tr-TR')
+    : '';
+  doc.text(`Tarih: ${dateStr}`, margin, yPos);
   yPos += 7;
   doc.text(`Durum: ${getStatusText(shipment.status)}`, margin, yPos);
   yPos += 10;

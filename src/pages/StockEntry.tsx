@@ -11,6 +11,7 @@ import { exportStockEntriesToExcel } from '../utils/excelExport';
 import { importStockEntriesFromExcel } from '../utils/excelImport';
 import AIFormatFixModal from '../components/AIFormatFixModal';
 import { Download, Plus, X, Upload } from 'lucide-react';
+import { formatDate } from '../utils/formatDate';
 
 export default function StockEntry() {
   const location = useLocation();
@@ -132,6 +133,11 @@ export default function StockEntry() {
     
     if (isNaN(unitPrice) || unitPrice < 0) {
       alert('Birim Fiyat geçerli bir sayı olmalıdır');
+      return;
+    }
+    
+    if (!formData.warehouse) {
+      alert('Depo seçimi zorunludur');
       return;
     }
     
@@ -527,13 +533,14 @@ export default function StockEntry() {
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Depo</label>
+                  <label className="excel-form-label">Depo <span style={{ color: 'red' }}>*</span></label>
                   <select
                     className="excel-form-select"
                     value={formData.warehouse}
                     onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
+                    required
                   >
-                    <option value="">Depo Seçiniz (Opsiyonel)</option>
+                    <option value="">Depo Seçiniz (Zorunlu)</option>
                     {warehouses.map(warehouse => (
                       <option key={warehouse.id} value={warehouse.name}>
                         {warehouse.name}
@@ -713,9 +720,7 @@ export default function StockEntry() {
                 {entries.map((entry) => (
                   <tr key={entry.id}>
                     <td>
-                      {entry.arrivalDate
-                        ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR')
-                        : '-'}
+                      {formatDate(entry.arrivalDate)}
                     </td>
                     <td>{entry.materialName}</td>
                     <td>{entry.category}</td>
@@ -799,4 +804,3 @@ export default function StockEntry() {
     </Layout>
   );
 }
-

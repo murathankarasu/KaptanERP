@@ -5,6 +5,7 @@ import { getPersonnel } from '../services/personnelService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { CalendarRange, Plus, Save, X, Edit, Trash2, CheckSquare, Download, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { formatDate } from '../utils/formatDate';
 
 export default function LeaveManagement() {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -178,7 +179,7 @@ export default function LeaveManagement() {
               {leaves.map(l => (
                 <tr key={l.id}>
                   <td>{l.personnelName || l.personnelId}</td>
-                  <td>{l.startDate.toLocaleDateString('tr-TR')} - {l.endDate.toLocaleDateString('tr-TR')}</td>
+                  <td>{formatDate(l.startDate)} - {formatDate(l.endDate)}</td>
                   <td>{l.days} gün</td>
                   <td>{typeLabel(l.type)}</td>
                   <td>{statusLabel(l.status)}</td>
@@ -251,7 +252,7 @@ const exportPdf = (rows: LeaveRequest[]) => {
   y += 8;
   doc.setFontSize(10);
   rows.forEach((r) => {
-    const line = `${r.personnelName || r.personnelId} | ${r.startDate.toLocaleDateString('tr-TR')} - ${r.endDate.toLocaleDateString('tr-TR')} | ${r.days} gün | ${typeLabel(r.type)} | ${statusLabel(r.status)}`;
+    const line = `${r.personnelName || r.personnelId} | ${formatDate(r.startDate)} - ${formatDate(r.endDate)} | ${r.days} gün | ${typeLabel(r.type)} | ${statusLabel(r.status)}`;
     doc.text(line, 14, y);
     if (r.note) {
       y += 5;

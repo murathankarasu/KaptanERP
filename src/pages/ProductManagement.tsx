@@ -260,7 +260,7 @@ export default function ProductManagement() {
                       </button>
                     <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => goToStockEntry(p)}>
                       Stok Girişi
-                    </button>
+                      </button>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px', color: '#dc3545' }} onClick={() => p.id && handleDelete(p.id)}>
                         <Trash2 size={14} /> Sil
                       </button>

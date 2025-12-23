@@ -37,7 +37,7 @@ export const importStockEntriesFromExcel = async (
         const headers = jsonData[0].map((h: any) => String(h).trim());
         
         // Format kontrolü - beklenen başlıkları kontrol et
-        const expectedHeaders = ['Geliş Tarihi', 'Malzeme Adı', 'Kategori', 'Birim', 'Gelen Miktar', 'Birim Fiyat', 'Tedarikçi'];
+        const expectedHeaders = ['Geliş Tarihi', 'Malzeme Adı', 'Kategori', 'Birim', 'Gelen Miktar', 'Birim Fiyat', 'Tedarikçi', 'Depo'];
         const headerMap: { [key: string]: string } = {
           'Geliş Tarihi': 'arrivalDate',
           'Malzeme Adı': 'materialName',
@@ -46,6 +46,7 @@ export const importStockEntriesFromExcel = async (
           'Gelen Miktar': 'quantity',
           'Birim Fiyat': 'unitPrice',
           'Tedarikçi': 'supplier',
+          'Depo': 'warehouse',
           'Not': 'note',
           'Kritik Seviye': 'criticalLevel'
         };
@@ -126,10 +127,10 @@ export const importStockEntriesFromExcel = async (
             });
             
             // Gerekli alanları kontrol et
-            if (!entry.materialName || !entry.category || !entry.unit) {
+            if (!entry.materialName || !entry.category || !entry.unit || !entry.warehouse) {
               failed++;
-              errors.push(`Satır ${i + 1}: Malzeme Adı, Kategori ve Birim zorunludur`);
-              return;
+              errors.push(`Satır ${i + 1}: Malzeme Adı, Kategori, Birim ve Depo zorunludur`);
+              continue; // Bir sonraki satıra geç, return yerine continue kullanmalıyız
             }
             
             // Tarih dönüşümü
@@ -176,6 +177,7 @@ export const importStockEntriesFromExcel = async (
               quantity: entry.quantity,
               unitPrice: entry.unitPrice,
               supplier: String(entry.supplier || '').trim(),
+              warehouse: String(entry.warehouse || '').trim(),
               note: String(entry.note || '').trim()
             };
             

@@ -199,7 +199,7 @@ export default function RequisitionManagement() {
                 {reqs.map((r) => (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 600 }}>{r.reqNumber}</td>
-                    <td>{r.requestDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{r.requestDate ? new Date(r.requestDate as any).toLocaleDateString('tr-TR') : ''}</td>
                     <td>{r.requestedBy || '-'}</td>
                     <td>{r.status}</td>
                     <td>{r.items.length}</td>

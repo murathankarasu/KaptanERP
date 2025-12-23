@@ -222,7 +222,7 @@ export default function PurchaseOrderManagement() {
                   <tr key={p.id}>
                     <td style={{ fontWeight: 600 }}>{p.poNumber}</td>
                     <td>{p.supplier}</td>
-                    <td>{p.orderDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{p.orderDate ? new Date(p.orderDate as any).toLocaleDateString('tr-TR') : ''}</td>
                     <td>{p.status}</td>
                     <td>{p.items.length}</td>
                     <td>{(p.totalAmount || 0).toFixed(2)} ₺</td>

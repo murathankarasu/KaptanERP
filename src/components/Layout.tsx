@@ -1,9 +1,9 @@
-import { ReactNode, useEffect, useRef } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { logout } from '../services/authService';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { hasPermission, getAllPermissions, PermissionType } from '../types/permissions';
-import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info, Brain } from 'lucide-react';
+import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info, Brain, HelpCircle, X as CloseIcon } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,6 +11,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -117,6 +118,258 @@ export default function Layout({ children }: LayoutProps) {
     if (!item.permission) return true;
     return hasPermission(userPermissions, item.permission);
   });
+
+  const helpContent: Record<string, { title: string; items: string[] }> = {
+    '/dashboard': {
+      title: 'Yönetim Paneli',
+      items: [
+        'Genel özet, kritik uyarılar ve son hareketler.',
+        'Stok giriş/çıkış, personel çıkışları, satış trendi hızlı görüntüleme.'
+      ]
+    },
+    '/stock-entry': {
+      title: 'Stok Giriş',
+      items: [
+        'Geliş Tarihi: Malzemenin depoya fiilen kabul edildiği gün. Stok yaşlandırma, günlük rapor ve hareket sıralaması bu tarihe göre hesaplanır; fatura tarihi yerine kabul tarihini yazın.',
+        'SKU: Ürün kartındaki stok kodu. Doluysa ürün kartı ile otomatik eşleştirme, hızlı arama ve raporlarda standart kimlik sağlar; boş bırakılabilir.',
+        'Malzeme Adı: Stokta gözükecek ana ad. Aynı ürün için aynı yazım kullanın; farklı yazım ayrı malzeme gibi görünür.',
+        'Kategori: Ürünün sınıfı (Hammadde, Ambalaj, Yarı Mamul vb.). Kategori bazlı filtre, rapor ve analizlerde kullanılır.',
+        'Varyant (Renk/Beden): Aynı malzemenin alt tipi. Örn: Kırmızı-M; varyant girilirse stok takibi malzeme+varyant seviyesinde ayrılır.',
+        'Birim: Giriş miktarının ölçü birimi (Adet, Kg, Lt...). Stok ve çıkış işlemleri bu birime göre hesaplanır.',
+        'Temel Birim: Ürün kartında tanımlı ana birim. Farklı birimle giriş yapıyorsanız dönüşüm için referanstır.',
+        'Dönüşüm Katsayısı: Seçilen birimin temel birime çevrim oranı. Örn: 1 Koli = 12 Adet ise 12 yazın; stok hesabı buna göre yapılır.',
+        'Gelen Miktar: Bu girişte depoya alınan toplam miktar. Birim alanındaki ölçüye göre girilir.',
+        'Birim Fiyat: Malzemenin giriş birim maliyeti. Toplam giriş tutarı ve maliyet raporları bu değerle hesaplanır.',
+        'Tedarikçi: Malzemenin temin edildiği firma. Tedarikçi bazlı rapor, izleme ve kalite karşılaştırmalarında kullanılır.',
+        'Depo: Malzemenin gireceği fiziksel depo. Zorunludur; stoklar depo bazında tutulur.',
+        'Raf/Göz (Bin): Depo içi konum kodu (örn: A-01-03). Sayım ve toplamada hızlı bulunmasını sağlar.',
+        'Seri/Lot: Lot veya seri numarası. İzlenebilirlik ve geri çağırma süreçleri için kritiktir; opsiyonel.',
+        'SKT: Son kullanma tarihi. Yaklaşan SKT uyarıları ve FIFO takibi için kullanılır; opsiyonel.',
+        'Kritik Seviye: Minimum stok eşiği. Stok bu seviyenin altına düşerse uyarı oluşturur.',
+        'Not: İrsaliye no, kalite kontrol sonucu, teslim şartı gibi bu girişe özel açıklamalar.'
+      ]
+    },
+    '/stock-output': {
+      title: 'Personel Çıkış',
+      items: [
+        'Personellere zimmet çıkışı; miktar stoktan düşülür.',
+        'Zimmet imzası için çıkış sonrası yönlendirme.'
+      ]
+    },
+    '/stock-status': {
+      title: 'Stok Durumu',
+      items: [
+        'Anlık stok, kritik seviye ve depo bazlı durum.',
+        'Kırmızı: kritik, turuncu: uyarı, yeşil: yeterli.'
+      ]
+    },
+    '/warehouse-management': {
+      title: 'Depo Yönetimi',
+      items: [
+        'Depo ve raf (bin) tanımlarını yönetin.',
+        'Adresleme ve stok konumlandırma.'
+      ]
+    },
+    '/product-management': {
+      title: 'Ürün Kartları',
+      items: [
+        'SKU, temel birim, barkod ve varyant tanımı.',
+        'Birim dönüşümleri ve lot/SKT gereksinimi.'
+      ]
+    },
+    '/shipment-management': {
+      title: 'Sevkiyat Takip',
+      items: [
+        'Sipariş/teklif bağlı sevkiyat oluşturma.',
+        'İrsaliye ve teslimat planlaması.'
+      ]
+    },
+    '/requisition-management': {
+      title: 'Satınalma Talepleri',
+      items: [
+        'İç talepleri topla, onayla, RFQ/PO sürecine aktar.',
+        'Talep durumları: taslak, onay, kapalı.'
+      ]
+    },
+    '/rfq-management': {
+      title: 'Teklif Toplama (RFQ)',
+      items: [
+        'Tedarikçilere teklif isteği gönder, yanıtları kaydet.',
+        'RFQ kapatılınca siparişe dönüştürülebilir.'
+      ]
+    },
+    '/purchase-orders': {
+      title: 'Satınalma Siparişleri',
+      items: [
+        'Onaylı siparişleri GRN/irsaliye ile kapatın.',
+        'Para birimi ve miktar takibi.'
+      ]
+    },
+    '/goods-receipts': {
+      title: 'Mal Kabul (GRN)',
+      items: [
+        'Gelen siparişleri kabul et, stok girişine bağla.',
+        'Kabul/red miktarlarını kaydedin.'
+      ]
+    },
+    '/price-lists': {
+      title: 'Fiyat Listeleri',
+      items: [
+        'Müşteri grubu, tarih ve miktar kırılımı ile fiyat kuralı.',
+        'Önceliklendirme ve indirim yüzdesi yönetimi.'
+      ]
+    },
+    '/customer-management': {
+      title: 'Müşteri Kayıtları',
+      items: [
+        'Cari bilgiler, bakiye ve kredi limiti takibi.',
+        'Grup, iletişim ve vergi bilgileri.'
+      ]
+    },
+    '/customer-payments': {
+      title: 'Tahsilat',
+      items: [
+        'Müşteri tahsilatlarını kaydet ve bakiyeyi güncelle.',
+        'Ödeme tarihi ve açıklama ekleyin.'
+      ]
+    },
+    '/customer-aging': {
+      title: 'Cari Yaşlandırma',
+      items: [
+        'Vade bazlı alacakların dağılımı (0-30-60-90+).',
+        'Nakit akış öngörüsü için kullanılır.'
+      ]
+    },
+    '/customer-insights': {
+      title: 'Müşteri Görünümü',
+      items: [
+        'Satış davranışı, ürün tercihleri ve ödeme alışkanlıkları.',
+        'Risk/kazanç segmentasyonu.'
+      ]
+    },
+    '/order-management': {
+      title: 'Sipariş Yönetimi',
+      items: [
+        'Satış siparişi oluşturma, durum takibi ve fiyat kontrolü.',
+        'Kredi limiti aşımı uyarıları.'
+      ]
+    },
+    '/quotes': {
+      title: 'Teklifler',
+      items: [
+        'Müşterilere teklif hazırlama, revize etme.',
+        'Teklifi siparişe dönüştürme akışı.'
+      ]
+    },
+    '/bom': {
+      title: 'BOM Yönetimi',
+      items: [
+        'Ürün reçetesi (çok seviyeli) tanımlama.',
+        'MRP ve üretim emirlerine girdi sağlar.'
+      ]
+    },
+    '/mrp': {
+      title: 'MRP Planlama',
+      items: [
+        'Talep ve stok durumuna göre malzeme ihtiyaç planı.',
+        'Satınalma/üretim önerileri üretir.'
+      ]
+    },
+    '/shop-floor': {
+      title: 'Shop Floor',
+      items: [
+        'Üretim emirlerinin iş istasyonu bazlı takibi.',
+        'Gerçekleşen süre ve duruş kayıtları.'
+      ]
+    },
+    '/journal-entries': {
+      title: 'Hareket Kayıtları',
+      items: [
+        'Muhasebe fişleri: tarih, açıklama, tutar, hesap.',
+        'Çoklu para birimi desteği.'
+      ]
+    },
+    '/edocs-local': {
+      title: 'e-Belge PDF/UBL',
+      items: [
+        'e-Fatura/e-Arşiv PDF ve UBL üretimi.',
+        'Yerel olarak indirme ve paylaşma.'
+      ]
+    },
+    '/sales-invoices': {
+      title: 'Satış Faturaları',
+      items: [
+        'Sipariş/irsaliye bağlı fatura oluşturma.',
+        'Durum takibi: taslak, kesildi, ödendi.'
+      ]
+    },
+    '/personnel-management': {
+      title: 'Personel Yönetimi',
+      items: [
+        'Personel kartları, departman ve yetki atamaları.',
+        'Yetkiler: stok giriş/çıkış, depo, dashboard vb.'
+      ]
+    },
+    '/leave-management': {
+      title: 'İzin Yönetimi',
+      items: [
+        'İzin talebi oluşturma/onaylama.',
+        'Tarih aralığı ve durum takibi.'
+      ]
+    },
+    '/payroll': {
+      title: 'Bordro Hesaplama',
+      items: [
+        'Brütten nete maaş hesaplama (TR mevzuatına uygun).',
+        'AGI/SGK/BES kesinti simülasyonu.'
+      ]
+    },
+    '/activity-logs': {
+      title: 'Kullanıcı İşlemleri',
+      items: [
+        'Kullanıcı bazlı aksiyon logları.',
+        'Hata çözümü ve denetim izi.'
+      ]
+    },
+    '/settings': {
+      title: 'Ayarlar',
+      items: [
+        'Veri indirme (Excel) ve silme (sadece yönetici).',
+        'Hesap silme, bildirimler ve sorun bildir.'
+      ]
+    },
+    '/ai-assistant': {
+      title: 'Yapay Zeka Asistanı',
+      items: [
+        'Serbest soru-cevap: sipariş, stok, müşteri özetleri.',
+        'Stok analizi ve günlük özet raporları.'
+      ]
+    },
+    '/stock-entry': {
+      title: 'Stok Giriş',
+      items: [
+        'Depoya giriş: miktar, birim, SKT/lot opsiyonel.',
+        'Kritik seviye bilgisi için stok durumu güncellenir.'
+      ]
+    },
+    '/stock-output': {
+      title: 'Personel Çıkış',
+      items: [
+        'Zimmetleme ve stok düşümü.',
+        'Çıkış sonrası imza ekranına yönlendirme.'
+      ]
+    },
+    '/stock-status': {
+      title: 'Stok Durumu',
+      items: [
+        'Malzeme bazlı mevcut stok ve kritik seviyeler.',
+        'Depo ve raf bazlı stok görüntüleme.'
+      ]
+    }
+  };
+
+  const currentHelp =
+    Object.entries(helpContent).find(([path]) => location.pathname.startsWith(path))?.[1] || null;
 
   const navRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -237,7 +490,90 @@ export default function Layout({ children }: LayoutProps) {
       <main style={{ flex: 1, overflow: 'auto', background: '#ffffff' }}>
         {children}
       </main>
+
+      {/* Yardım Butonu */}
+      {currentHelp && (
+        <>
+          <button
+            onClick={() => setShowHelp(true)}
+            style={{
+              position: 'fixed',
+              right: '24px',
+              bottom: '24px',
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              border: '2px solid #000',
+              background: '#fff',
+              color: '#000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              cursor: 'pointer',
+              zIndex: 1000
+            }}
+            aria-label="Yardım"
+          >
+            <HelpCircle size={22} />
+          </button>
+
+          {showHelp && (
+            <div
+              onClick={() => setShowHelp(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.35)',
+                zIndex: 1001,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '16px'
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: '#fff',
+                  border: '2px solid #000',
+                  maxWidth: '520px',
+                  width: '100%',
+                  padding: '20px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                  color: '#000'
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <HelpCircle size={20} />
+                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{currentHelp.title}</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowHelp(false)}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    aria-label="Kapat"
+                  >
+                    <CloseIcon size={18} />
+                  </button>
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', lineHeight: 1.5 }}>
+                  {currentHelp.items.map((item, idx) => (
+                    <li key={idx} style={{ marginBottom: '6px' }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import { StockStatus, StockEntry, StockOutput } from '../services/stockService';
 import { generateAIStatusReport, generateDailyAIReport } from '../services/aiService';
 import { addErrorLog } from '../services/userService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
+import { formatDate } from '../utils/formatDate';
 import { Package, AlertTriangle, TrendingUp, Brain, FileText } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 
@@ -540,7 +541,7 @@ export default function Dashboard() {
                     <div>
                       <strong style={{ color: '#000', fontWeight: '600' }}>{entry.materialName}</strong>
                       <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-                        {entry.arrivalDate ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR') : ''} - {entry.quantity} {entry.unit}
+                        {formatDate(entry.arrivalDate)} - {entry.quantity} {entry.unit}
                       </div>
                     </div>
                   </div>
@@ -572,7 +573,7 @@ export default function Dashboard() {
                     <div>
                       <strong style={{ color: '#000', fontWeight: '600' }}>{output.materialName}</strong>
                       <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-                        {output.employee} - {output.issueDate ? new Date(output.issueDate as any).toLocaleDateString('tr-TR') : ''}
+                        {output.employee} - {formatDate(output.issueDate)}
                       </div>
                     </div>
                   </div>
@@ -585,4 +586,3 @@ export default function Dashboard() {
     </Layout>
   );
 }
-

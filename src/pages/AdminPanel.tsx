@@ -170,13 +170,13 @@ export default function AdminPanel() {
           return;
         }
         const company = companies.find(c => c.id === userFormData.companyId);
-        if (!company) {
+      if (!company) {
           alert('Geçerli bir şirket seçin');
-          return;
-        }
-        targetCompanyId = company.id || '';
-        targetCompanyCode = company.code || '';
-        targetCompanyName = company.name || '';
+        return;
+      }
+      targetCompanyId = company.id || '';
+      targetCompanyCode = company.code || '';
+      targetCompanyName = company.name || '';
       } else {
         // Yeni şirket oluştur ve kullanıcıyı yönetici olarak ata
         if (!userFormData.companyName) {
@@ -559,21 +559,21 @@ export default function AdminPanel() {
                           <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
                             Var olan şirket seçilmeden hesap oluşturulamaz.
                           </p>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#000' }}>
                             Şirket Kodu
-                          </label>
-                          <input
-                            type="text"
+                      </label>
+                      <input
+                        type="text"
                             value={userFormData.companyCode}
                             readOnly
-                            style={{
-                              width: '100%',
-                              padding: '12px',
+                        style={{
+                          width: '100%',
+                          padding: '12px',
                               border: '2px solid #000',
-                              borderRadius: '0',
-                              fontSize: '14px',
+                          borderRadius: '0',
+                          fontSize: '14px',
                               background: '#f8f9fa'
                             }}
                           />
@@ -616,12 +616,12 @@ export default function AdminPanel() {
                               border: '2px solid #000',
                               borderRadius: '0',
                               fontSize: '14px'
-                            }}
-                          />
-                          <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
+                        }}
+                      />
+                      <p style={{ fontSize: '11px', color: '#666', marginTop: '4px', margin: 0 }}>
                             Önce şirketi oluşturur, ardından yöneticiyi açar.
-                          </p>
-                        </div>
+                      </p>
+                    </div>
                       </>
                     )}
                     <div>

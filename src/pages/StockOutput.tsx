@@ -6,11 +6,14 @@ import { getPersonnel } from '../services/personnelService';
 import { getWarehouses } from '../services/warehouseService';
 import { addErrorLog } from '../services/userService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
+import { getCurrentUser } from '../utils/getCurrentUser';
 import { exportStockOutputsToExcel } from '../utils/excelExport';
 import { useNavigate } from 'react-router-dom';
 import { Download, Plus, X, FileSignature } from 'lucide-react';
 
 export default function StockOutput() {
+  const currentUser = getCurrentUser();
+  const isPrivileged = currentUser?.role === 'manager' || currentUser?.role === 'admin';
   const [outputs, setOutputs] = useState<StockOutputType[]>([]);
   const [stockStatus, setStockStatus] = useState<any[]>([]);
   const [personnel, setPersonnel] = useState<any[]>([]);
@@ -103,6 +106,11 @@ export default function StockOutput() {
       alert(`Verilen miktar mevcut stoktan fazla olamaz. Maksimum: ${maxQuantity} ${selectedMaterial?.unit}`);
       return;
     }
+
+    if (!formData.warehouse) {
+      alert('Depo seçimi zorunludur');
+      return;
+    }
     
     // Personel kontrolü
     const selectedPerson = personnel.find(p => p.name === formData.employee);
@@ -113,8 +121,9 @@ export default function StockOutput() {
     
     try {
       const currentCompany = getCurrentCompany();
+      const issueDateValue = isPrivileged ? new Date(formData.issueDate) : new Date();
       const output: StockOutputType = {
-        issueDate: new Date(formData.issueDate),
+        issueDate: issueDateValue,
         employee: formData.employee,
         department: formData.department,
         sku: formData.sku || undefined,
@@ -245,7 +254,13 @@ export default function StockOutput() {
                     value={formData.issueDate}
                     onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
                     required
+                    disabled={!isPrivileged}
                   />
+                  {!isPrivileged && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                      Tarih otomatik bugüne ayarlanır; sadece yönetici/manager değiştirebilir.
+                    </div>
+                  )}
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">Personel *</label>
@@ -309,7 +324,7 @@ export default function StockOutput() {
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Depo *</label>
+                  <label className="excel-form-label">Depo <span style={{ color: 'red' }}>*</span></label>
                   <select
                     className="excel-form-select"
                     value={formData.warehouse}
@@ -325,7 +340,7 @@ export default function StockOutput() {
                     required
                     disabled={warehouses.length === 0}
                   >
-                    <option value="">Depo Seçiniz</option>
+                    <option value="">Depo Seçiniz (Zorunlu)</option>
                     {warehouses.map(w => (
                       <option key={w.id} value={w.name}>{w.name}</option>
                     ))}

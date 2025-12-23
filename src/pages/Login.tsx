@@ -71,6 +71,7 @@ export default function Login() {
           role: ensured.role || 'user',
           companyId: ensured.companyId,
           companyCode: ensured.companyCode,
+          companyName: ensured.companyName,
           personnelId,
           permissions
         }));
@@ -139,6 +140,7 @@ export default function Login() {
           role: ensured.role,
           companyId: ensured.companyId,
           companyCode: ensured.companyCode,
+          companyName: ensured.companyName,
           personnelId,
           permissions
         }));
@@ -679,4 +681,3 @@ export default function Login() {
     </div>
   );
 }
-

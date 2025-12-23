@@ -89,11 +89,15 @@ export const getActivityLogs = async (filters?: {
     }
     
     if (filters?.startDate) {
-      q = query(q, where('timestamp', '>=', Timestamp.fromDate(filters.startDate)));
+      const start = new Date(filters.startDate);
+      start.setHours(0, 0, 0, 0);
+      q = query(q, where('timestamp', '>=', Timestamp.fromDate(start)));
     }
     
     if (filters?.endDate) {
-      q = query(q, where('timestamp', '<=', Timestamp.fromDate(filters.endDate)));
+      const end = new Date(filters.endDate);
+      end.setHours(23, 59, 59, 999);
+      q = query(q, where('timestamp', '<=', Timestamp.fromDate(end)));
     }
     
     const querySnapshot = await getDocs(q);

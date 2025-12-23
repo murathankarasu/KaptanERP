@@ -11,6 +11,10 @@ export default function EDocsLocal() {
     scenario: 'E_FATURA' as 'E_FATURA' | 'E_ARSIV',
     customerName: 'Test Müşteri',
     customerVknTckn: '1234567890',
+    sellerName: 'Test Şirket',
+    sellerTaxNumber: '1111111111',
+    sellerAddress: 'İstanbul',
+    sellerPhone: '0212 000 00 00',
     currency: 'TRY',
     lines: [
       { name: 'Ürün A', qty: 1, unitPrice: 500, vatRate: 18, discountPercent: 0 },
@@ -64,6 +68,10 @@ export default function EDocsLocal() {
       issueDate: invForm.issueDate,
       customerName: invForm.customerName,
       customerVknTckn: invForm.customerVknTckn,
+      sellerName: invForm.sellerName,
+      sellerTaxNumber: invForm.sellerTaxNumber,
+      sellerAddress: invForm.sellerAddress,
+      sellerPhone: invForm.sellerPhone,
       currency: invForm.currency,
       lines: invForm.lines
     });
@@ -134,6 +142,22 @@ export default function EDocsLocal() {
               <label className="excel-form-label">Para Birimi</label>
               <input className="excel-form-input" value={invForm.currency} onChange={(e) => setInvForm({ ...invForm, currency: e.target.value })} />
             </div>
+            <div className="excel-form-group">
+              <label className="excel-form-label">Satıcı Şirket</label>
+              <input className="excel-form-input" value={invForm.sellerName} onChange={(e) => setInvForm({ ...invForm, sellerName: e.target.value })} />
+            </div>
+            <div className="excel-form-group">
+              <label className="excel-form-label">Satıcı Vergi No</label>
+              <input className="excel-form-input" value={invForm.sellerTaxNumber} onChange={(e) => setInvForm({ ...invForm, sellerTaxNumber: e.target.value })} />
+            </div>
+            <div className="excel-form-group">
+              <label className="excel-form-label">Satıcı Adres</label>
+              <input className="excel-form-input" value={invForm.sellerAddress} onChange={(e) => setInvForm({ ...invForm, sellerAddress: e.target.value })} />
+            </div>
+            <div className="excel-form-group">
+              <label className="excel-form-label">Satıcı Telefon</label>
+              <input className="excel-form-input" value={invForm.sellerPhone} onChange={(e) => setInvForm({ ...invForm, sellerPhone: e.target.value })} />
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
             <button className="btn btn-primary" onClick={handleInvoicePdf}><Save size={14} /> PDF Üret</button>
@@ -182,4 +206,3 @@ export default function EDocsLocal() {
     </Layout>
   );
 }
-
