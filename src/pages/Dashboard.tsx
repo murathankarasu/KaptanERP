@@ -572,7 +572,7 @@ export default function Dashboard() {
                     <div>
                       <strong style={{ color: '#000', fontWeight: '600' }}>{output.materialName}</strong>
                       <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>
-                        {output.employee} - {output.issueDate.toLocaleDateString('tr-TR')}
+                        {output.employee} - {output.issueDate ? new Date(output.issueDate as any).toLocaleDateString('tr-TR') : ''}
                       </div>
                     </div>
                   </div>

@@ -4,6 +4,7 @@ import { addRFQ, getRFQs, updateRequisition, getRequisitions, RFQ, Requisition, 
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
 import { Plus, Save, X, Edit, CheckCircle, FileQuestion } from 'lucide-react';
+import { formatDate } from '../utils/formatDate';
 
 export default function RFQManagement() {
   const [rfqs, setRfqs] = useState<RFQ[]>([]);
@@ -194,7 +195,7 @@ export default function RFQManagement() {
                 {rfqs.map((r) => (
                   <tr key={r.id}>
                     <td style={{ fontWeight: 600 }}>{r.rfqNumber}</td>
-                    <td>{r.dueDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{formatDate(r.dueDate)}</td>
                     <td>{(r.suppliers || []).join(', ') || '-'}</td>
                     <td>{r.status}</td>
                     <td>{r.items.length}</td>

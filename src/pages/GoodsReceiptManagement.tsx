@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { addGoodsReceipt, getGoodsReceipts, updateGoodsReceipt, GoodsReceipt } from '../services/procurementService';
+import { formatDate } from '../utils/formatDate';
 import { addStockEntry, StockEntry } from '../services/stockService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
@@ -239,7 +240,7 @@ export default function GoodsReceiptManagement() {
                 {grns.map((g) => (
                   <tr key={g.id}>
                     <td style={{ fontWeight: 600 }}>{g.grnNumber}</td>
-                    <td>{g.receiptDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{formatDate(g.receiptDate)}</td>
                     <td>{g.warehouse || '-'}</td>
                     <td>{g.status}</td>
                     <td>{g.items.length}</td>

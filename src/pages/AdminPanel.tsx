@@ -7,6 +7,7 @@ import { getCompanies, Company, addCompany } from '../services/companyService';
 import { runHealthCheck, getLatestHealthReport, HealthReport } from '../services/systemHealthService';
 import { getInviteCodes, InviteCode } from '../services/inviteService';
 import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound } from 'lucide-react';
+import { formatDate } from '../utils/formatDate';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -778,7 +779,7 @@ export default function AdminPanel() {
                             {user.isActive ? 'Aktif' : 'Pasif'}
                           </span>
                         </td>
-                        <td>{user.lastLogin ? user.lastLogin.toLocaleDateString('tr-TR') : '-'}</td>
+                        <td>{user.lastLogin ? formatDate(user.lastLogin) : '-'}</td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
                             <button

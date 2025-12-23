@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { addOrder, getOrders, updateOrder, Order, OrderItem } from '../services/orderService';
+import { formatDate } from '../utils/formatDate';
 import { getCustomers, Customer } from '../services/customerService';
 import { getPriceRules, PriceRule, selectPriceRule } from '../services/priceService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
@@ -324,7 +325,7 @@ export default function OrderManagement() {
       'Sipariş No': o.orderNumber,
       Müşteri: o.customerName || '',
       Tedarikçi: o.supplier || '',
-      Tarih: o.orderDate.toLocaleDateString('tr-TR'),
+      Tarih: formatDate(o.orderDate),
       Durum: getStatusLabel(o.status),
       'Ürün Sayısı': o.items.length,
       'Toplam Tutar': o.totalAmount || 0
@@ -760,7 +761,7 @@ export default function OrderManagement() {
                   <tr key={order.id}>
                     <td style={{ fontWeight: '500' }}>{order.orderNumber}</td>
                     <td>{order.customerName || '-'}</td>
-                    <td>{order.orderDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{formatDate(order.orderDate)}</td>
                     <td>{order.supplier || '-'}</td>
                     <td>{order.items.length}</td>
                     <td style={{ fontWeight: '600' }}>{order.totalAmount?.toFixed(2) || '0.00'} {order.currency || 'TRY'}</td>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { addStockOutput, getStockOutputs, StockOutput as StockOutputType, getAllStockStatus } from '../services/stockService';
+import { formatDate } from '../utils/formatDate';
 import { getPersonnel } from '../services/personnelService';
 import { getWarehouses } from '../services/warehouseService';
 import { addErrorLog } from '../services/userService';
@@ -552,7 +553,7 @@ export default function StockOutput() {
               <tbody>
                 {outputs.map((output) => (
                   <tr key={output.id}>
-                    <td>{output.issueDate.toLocaleDateString('tr-TR')}</td>
+                    <td>{formatDate(output.issueDate)}</td>
                     <td>{output.employee}</td>
                     <td>{output.department}</td>
                     <td>{output.materialName}</td>
