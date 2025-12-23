@@ -344,20 +344,6 @@ export default function Layout({ children }: LayoutProps) {
         'Serbest soru-cevap: sipariş, stok, müşteri özetleri.',
         'Stok analizi ve günlük özet raporları.'
       ]
-    },
-    '/stock-output': {
-      title: 'Personel Çıkış',
-      items: [
-        'Zimmetleme ve stok düşümü.',
-        'Çıkış sonrası imza ekranına yönlendirme.'
-      ]
-    },
-    '/stock-status': {
-      title: 'Stok Durumu',
-      items: [
-        'Malzeme bazlı mevcut stok ve kritik seviyeler.',
-        'Depo ve raf bazlı stok görüntüleme.'
-      ]
     }
   };
 
