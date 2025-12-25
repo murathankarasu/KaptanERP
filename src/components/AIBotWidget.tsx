@@ -30,19 +30,19 @@ const AIBotWidget = ({ context }: AIBotWidgetProps) => {
     if (!question || loading) return;
 
     const history = messages.slice(-6);
-    const nextMessages = [...messages, { role: 'user', content: question }];
+    const nextMessages: AIBotMessage[] = [...messages, { role: 'user' as const, content: question }];
     setMessages(nextMessages);
     setInput('');
     setLoading(true);
 
     try {
       const reply = await askAIBot(question, context, history);
-      setMessages([...nextMessages, { role: 'assistant', content: reply.answer }]);
+      setMessages([...nextMessages, { role: 'assistant' as const, content: reply.answer }]);
     } catch (error: any) {
       setMessages([
         ...nextMessages,
         {
-          role: 'assistant',
+          role: 'assistant' as const,
           content: 'Yanıt alınırken hata oluştu. Lütfen tekrar deneyin.'
         }
       ]);

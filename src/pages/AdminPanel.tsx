@@ -1227,7 +1227,7 @@ export default function AdminPanel() {
               </div>
               <button
                 className="btn btn-primary"
-                onClick={handleRunAIAnomalyScan}
+                onClick={() => handleRunAIAnomalyScan()}
                 disabled={aiRunLoading}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               >
