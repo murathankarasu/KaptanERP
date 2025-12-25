@@ -6,14 +6,25 @@ import { getErrorLogs, resolveErrorLog, ErrorLog } from '../services/userService
 import { getCompanies, Company, addCompany } from '../services/companyService';
 import { runHealthCheck, getLatestHealthReport, HealthReport } from '../services/systemHealthService';
 import { getInviteCodes, InviteCode } from '../services/inviteService';
-import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound } from 'lucide-react';
+import { getActivityLogs, ActivityLog } from '../services/activityLogService';
+import { analyzeActivityAnomalies, analyzeMonetaryAnomalies, AIAmountEvent, AIAmountStats } from '../services/aiService';
+import { addAIAnomalyAlert, getAIAnomalyAlerts, resolveAIAnomalyAlert, AIAnomalyAlert, getAIAnomalyScanState, setAIAnomalyScanState } from '../services/aiAnomalyService';
+import { getInvoices } from '../services/invoiceService';
+import { getOrders } from '../services/orderService';
+import { getShipments } from '../services/shipmentService';
+import { getQuotes } from '../services/quoteService';
+import { getPurchaseOrders } from '../services/procurementService';
+import { getStockEntries } from '../services/stockService';
+import { getJournalEntries } from '../services/financeService';
+import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound, Bot } from 'lucide-react';
 import { formatDate } from '../utils/formatDate';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'users' | 'errors'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'errors' | 'ai-alerts'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+  const [aiAlerts, setAiAlerts] = useState<AIAnomalyAlert[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [, setInvites] = useState<InviteCode[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('all');
@@ -38,6 +49,10 @@ export default function AdminPanel() {
   const [healthReport, setHealthReport] = useState<HealthReport | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthMessage, setHealthMessage] = useState<string | null>(null);
+  const [aiStatusFilter, setAiStatusFilter] = useState<'open' | 'resolved' | 'all'>('open');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiRunLoading, setAiRunLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -60,10 +75,14 @@ export default function AdminPanel() {
       loadCompanies();
       loadInvites();
       loadHealthLatest();
-    } else {
+    } else if (activeTab === 'errors') {
       loadErrorLogs();
+    } else {
+      loadCompanies();
+      loadAIAlerts();
+      maybeAutoRunAIAnomalyScan();
     }
-  }, [activeTab, errorFilter, selectedCompanyId, navigate]);
+  }, [activeTab, errorFilter, aiStatusFilter, selectedCompanyId, navigate]);
 
   const loadCompanies = async () => {
     try {
@@ -123,6 +142,20 @@ export default function AdminPanel() {
       alert('Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAIAlerts = async () => {
+    try {
+      setAiLoading(true);
+      const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
+      const status = aiStatusFilter === 'all' ? undefined : aiStatusFilter;
+      const data = await getAIAnomalyAlerts({ companyId, status, limit: 200 });
+      setAiAlerts(data);
+    } catch (error) {
+      console.error('AI uyarıları yüklenirken hata:', error);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -294,6 +327,294 @@ export default function AdminPanel() {
       loadErrorLogs();
     } catch (error: any) {
       alert('Hata: ' + (error.message || 'Hata çözülürken bir hata oluştu'));
+    }
+  };
+
+  const handleResolveAIAlert = async (id: string) => {
+    try {
+      const currentUser = localStorage.getItem('currentUser');
+      const username = currentUser ? JSON.parse(currentUser).username : 'Admin';
+      await resolveAIAnomalyAlert(id, username);
+      loadAIAlerts();
+    } catch (error: any) {
+      alert('AI uyarı çözme hatası: ' + (error.message || ''));
+    }
+  };
+
+  const getAnomalyRules = () => ({
+    offHours: { startHour: 22, endHour: 6 },
+    spikeMultiplier: 3,
+    minEventsForSpike: 10
+  });
+
+  const getAmountRules = () => ({
+    lookbackDays: 15,
+    lowMultiplier: 0.2,
+    highMultiplier: 5,
+    iqrMultiplier: 1.5
+  });
+
+  const isWithinRange = (date: Date, startDate: Date, endDate: Date) => {
+    if (!date || !startDate || !endDate) return false;
+    return date >= startDate && date <= endDate;
+  };
+
+  const getLastNDaysRange = (days: number) => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+    return { startDate, endDate };
+  };
+
+  const quantile = (values: number[], q: number) => {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sorted[base + 1] !== undefined) {
+      return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    }
+    return sorted[base];
+  };
+
+  const buildAmountStats = (events: AIAmountEvent[]): AIAmountStats[] => {
+    const grouped: Record<string, number[]> = {};
+    events.forEach((ev) => {
+      if (!Number.isFinite(ev.amount)) return;
+      if (!grouped[ev.module]) grouped[ev.module] = [];
+      grouped[ev.module].push(ev.amount);
+    });
+
+    return Object.entries(grouped).map(([module, values]) => {
+      const count = values.length;
+      const mean = values.reduce((s, v) => s + v, 0) / Math.max(count, 1);
+      const median = quantile(values, 0.5);
+      const q1 = quantile(values, 0.25);
+      const q3 = quantile(values, 0.75);
+      const iqr = q3 - q1;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      return {
+        module,
+        count,
+        mean,
+        median,
+        q1,
+        q3,
+        iqr,
+        min,
+        max
+      };
+    });
+  };
+
+  const maybeAutoRunAIAnomalyScan = async () => {
+    try {
+      if (activeTab !== 'ai-alerts') return;
+      const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
+      const scanState = await getAIAnomalyScanState(companyId);
+      const lastScanAt = scanState?.lastScanAt;
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      if (!lastScanAt || now - lastScanAt.getTime() > dayMs) {
+        await handleRunAIAnomalyScan(true);
+      }
+    } catch (error) {
+      console.error('AI otomatik tarama kontrolü hatası:', error);
+    }
+  };
+
+  const handleRunAIAnomalyScan = async (silent = false) => {
+    try {
+      setAiRunLoading(true);
+      if (!silent) setAiMessage(null);
+      const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
+      const logs = await getActivityLogs({ companyId, limit: 300 });
+      if (logs.length === 0 && !silent) {
+        setAiMessage('Aktivite logu bulunamadi, tutar anomalileri yine de taranacak.');
+      }
+
+      const activityFindings = logs.length
+        ? await analyzeActivityAnomalies(
+            logs.map((log: ActivityLog) => ({
+              timestamp: log.timestamp,
+              user: log.username || log.userEmail || log.userId || 'unknown',
+              action: log.action,
+              module: String(log.module || ''),
+              details: log.details
+            })),
+            getAnomalyRules()
+          )
+        : [];
+
+      const amountRules = getAmountRules();
+      const { startDate, endDate } = getLastNDaysRange(amountRules.lookbackDays);
+      const [
+        orders,
+        invoices,
+        shipments,
+        quotes,
+        purchaseOrders,
+        stockEntries,
+        journalEntries
+      ] = await Promise.all([
+        getOrders({ companyId, startDate, endDate }),
+        getInvoices(companyId),
+        getShipments({ companyId, startDate, endDate }),
+        getQuotes(companyId),
+        getPurchaseOrders(companyId),
+        getStockEntries({ companyId, startDate, endDate }),
+        getJournalEntries({ companyId, startDate, endDate, limit: 300 })
+      ]);
+
+      const amountEvents: AIAmountEvent[] = [];
+
+      orders.forEach((order) => {
+        const total =
+          order.totalAmount ??
+          order.items?.reduce((sum, item: any) => sum + (item.totalPrice ?? item.unitPrice * item.quantity), 0);
+        if (Number.isFinite(total) && total > 0 && order.orderDate) {
+          amountEvents.push({
+            module: 'Order',
+            date: order.orderDate,
+            amount: total,
+            currency: order.currency,
+            ref: order.orderNumber
+          });
+        }
+      });
+
+      invoices
+        .filter((inv) => isWithinRange(inv.date, startDate, endDate))
+        .forEach((inv) => {
+          if (Number.isFinite(inv.totalAmount) && inv.totalAmount > 0) {
+            amountEvents.push({
+              module: 'Invoice',
+              date: inv.date,
+              amount: inv.totalAmount,
+              currency: inv.currency,
+              ref: inv.invoiceNumber
+            });
+          }
+        });
+
+      shipments.forEach((shipment) => {
+        if (Number.isFinite(shipment.totalAmount) && shipment.totalAmount > 0 && shipment.shipmentDate) {
+          amountEvents.push({
+            module: 'Shipment',
+            date: shipment.shipmentDate,
+            amount: shipment.totalAmount,
+            currency: shipment.currency,
+            ref: shipment.shipmentNumber
+          });
+        }
+      });
+
+      quotes
+        .filter((quote) => isWithinRange(quote.quoteDate, startDate, endDate))
+        .forEach((quote) => {
+          if (Number.isFinite(quote.totalAmount) && quote.totalAmount > 0) {
+            amountEvents.push({
+              module: 'Quote',
+              date: quote.quoteDate,
+              amount: quote.totalAmount,
+              currency: quote.currency,
+              ref: quote.quoteNumber
+            });
+          }
+        });
+
+      purchaseOrders
+        .filter((po) => isWithinRange(po.orderDate, startDate, endDate))
+        .forEach((po: any) => {
+          const total =
+            po.totalAmount ??
+            (Array.isArray(po.items)
+              ? po.items.reduce((sum: number, item: any) => sum + (item.unitPrice ?? 0) * (item.quantity ?? 0), 0)
+              : 0);
+          if (Number.isFinite(total) && total > 0) {
+            amountEvents.push({
+              module: 'PurchaseOrder',
+              date: po.orderDate,
+              amount: total,
+              ref: po.poNumber
+            });
+          }
+        });
+
+      stockEntries.forEach((entry) => {
+        const total = (entry.quantity || 0) * (entry.unitPrice || 0);
+        if (Number.isFinite(total) && total > 0 && entry.arrivalDate) {
+          amountEvents.push({
+            module: 'StockEntry',
+            date: entry.arrivalDate,
+            amount: total,
+            ref: entry.materialName
+          });
+        }
+      });
+
+      journalEntries.forEach((entry) => {
+        const total = Array.isArray(entry.lines)
+          ? entry.lines.reduce((sum, line) => sum + Math.abs(line.amount || 0), 0)
+          : 0;
+        if (Number.isFinite(total) && total > 0 && entry.date) {
+          amountEvents.push({
+            module: 'JournalEntry',
+            date: entry.date,
+            amount: total,
+            currency: entry.baseCurrency,
+            ref: entry.referenceType || entry.description
+          });
+        }
+      });
+
+      const sortedEvents = amountEvents
+        .filter((ev) => isWithinRange(ev.date, startDate, endDate))
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 200);
+      const stats = buildAmountStats(sortedEvents);
+      const monetaryFindings = await analyzeMonetaryAnomalies(sortedEvents, stats, {
+        lowMultiplier: amountRules.lowMultiplier,
+        highMultiplier: amountRules.highMultiplier,
+        iqrMultiplier: amountRules.iqrMultiplier
+      });
+
+      const findings = [...activityFindings, ...monetaryFindings];
+
+      if (findings.length === 0) {
+        if (!silent) setAiMessage('Anomali bulunamadı.');
+        await setAIAnomalyScanState(companyId);
+        return;
+      }
+
+      const currentUser = localStorage.getItem('currentUser');
+      const username = currentUser ? JSON.parse(currentUser).username : 'Admin';
+
+      for (const item of findings) {
+        await addAIAnomalyAlert({
+          companyId,
+          createdBy: username,
+          title: item.title,
+          summary: item.summary,
+          severity: item.severity,
+          evidence: item.evidence,
+          relatedUsers: item.relatedUsers,
+          relatedModules: item.relatedModules
+        });
+      }
+
+      await setAIAnomalyScanState(companyId);
+      if (!silent) setAiMessage(`${findings.length} adet anomali uyarısı oluşturuldu.`);
+      loadAIAlerts();
+    } catch (error: any) {
+      console.error('AI anomali taraması hatası:', error);
+      if (!silent) setAiMessage('Anomali taraması başarısız: ' + (error.message || ''));
+    } finally {
+      setAiRunLoading(false);
     }
   };
 
@@ -888,8 +1209,142 @@ export default function AdminPanel() {
             </div>
           </>
         )}
+
+        {/* AI Anomali Uyarıları */}
+        {activeTab === 'ai-alerts' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#000', margin: 0 }}>
+                  AI Anomali Uyarıları
+                </h2>
+                <p style={{ fontSize: '12px', color: '#666', margin: '6px 0 0' }}>
+                  Aktivite loglarına göre olağan akışa aykırı hareketleri tespit eder.
+                </p>
+                <p style={{ fontSize: '11px', color: '#888', margin: '4px 0 0' }}>
+                  Kurallar: 22:00-06:00 hareketleri, kullanici patlamasi ({'>='}10 ve 3x), tutar sapmasi (15 gun medyan/IQR, 0.2x-5x).
+                </p>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleRunAIAnomalyScan}
+                disabled={aiRunLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Bot size={16} />
+                {aiRunLoading ? 'Taranıyor...' : 'Anomali Taraması Yap'}
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: '14px', fontWeight: '600', color: '#000' }}>Şirket Filtresi:</label>
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  border: '2px solid #000',
+                  borderRadius: '0',
+                  fontSize: '14px',
+                  minWidth: '200px'
+                }}
+              >
+                <option value="all">Tüm Şirketler</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>{company.name}</option>
+                ))}
+              </select>
+              <select
+                value={aiStatusFilter}
+                onChange={(e) => setAiStatusFilter(e.target.value as 'open' | 'resolved' | 'all')}
+                style={{
+                  padding: '8px 12px',
+                  border: '2px solid #000',
+                  borderRadius: '0',
+                  fontSize: '14px',
+                  minWidth: '160px'
+                }}
+              >
+                <option value="open">Açık Uyarılar</option>
+                <option value="resolved">Çözülmüş</option>
+                <option value="all">Tümü</option>
+              </select>
+            </div>
+
+            {aiMessage && (
+              <div style={{ marginBottom: '12px', padding: '10px 12px', border: '1px solid #ddd', background: '#f8f8f8', fontSize: '12px' }}>
+                {aiMessage}
+              </div>
+            )}
+
+            <div className="table-container">
+              {aiLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center' }}>Yükleniyor...</div>
+              ) : aiAlerts.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+                  AI uyarısı bulunmamaktadır.
+                </div>
+              ) : (
+                <table className="excel-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih/Saat</th>
+                      <th>Başlık</th>
+                      <th>Şiddet</th>
+                      <th>Özet</th>
+                      <th>İlgili Kullanıcı</th>
+                      <th>Modül</th>
+                      <th>Durum</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aiAlerts.map((alert) => (
+                      <tr key={alert.id}>
+                        <td>{alert.createdAt?.toLocaleString('tr-TR')}</td>
+                        <td style={{ fontWeight: 600 }}>{alert.title}</td>
+                        <td>
+                          <span style={{
+                            padding: '4px 8px',
+                            background: alert.severity === 'high' ? '#dc3545' : alert.severity === 'medium' ? '#f0ad4e' : '#6c757d',
+                            color: '#fff',
+                            fontSize: '11px',
+                            fontWeight: '600'
+                          }}>
+                            {alert.severity.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ maxWidth: '320px', wordBreak: 'break-word', fontSize: '12px' }}>{alert.summary}</td>
+                        <td style={{ fontSize: '12px' }}>{alert.relatedUsers?.join(', ') || '-'}</td>
+                        <td style={{ fontSize: '12px' }}>{alert.relatedModules?.join(', ') || '-'}</td>
+                        <td>
+                          {alert.status === 'resolved' ? (
+                            <span style={{ color: '#28a745', fontWeight: '600' }}>Çözüldü</span>
+                          ) : (
+                            <span style={{ color: '#dc3545', fontWeight: '600' }}>Açık</span>
+                          )}
+                        </td>
+                        <td>
+                          {alert.status !== 'resolved' && alert.id && (
+                            <button
+                              onClick={() => handleResolveAIAlert(alert.id!)}
+                              className="btn btn-secondary"
+                              style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <CheckCircle size={14} />
+                              Çöz
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </AdminLayout>
   );
 }
-

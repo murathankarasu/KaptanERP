@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, AlertTriangle, LogOut } from 'lucide-react';
+import { Users, AlertTriangle, LogOut, Bot } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab?: 'users' | 'errors';
-  onTabChange?: (tab: 'users' | 'errors') => void;
+  activeTab?: 'users' | 'errors' | 'ai-alerts';
+  onTabChange?: (tab: 'users' | 'errors' | 'ai-alerts') => void;
 }
 
 export default function AdminLayout({ children, activeTab: externalActiveTab, onTabChange }: AdminLayoutProps) {
   const navigate = useNavigate();
-  const [internalActiveTab, setInternalActiveTab] = useState<'users' | 'errors'>('users');
+  const [internalActiveTab, setInternalActiveTab] = useState<'users' | 'errors' | 'ai-alerts'>('users');
   
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
   
-  const handleTabChange = (tab: 'users' | 'errors') => {
+  const handleTabChange = (tab: 'users' | 'errors' | 'ai-alerts') => {
     if (onTabChange) {
       onTabChange(tab);
     } else {
@@ -147,6 +147,36 @@ export default function AdminLayout({ children, activeTab: externalActiveTab, on
             <AlertTriangle size={20} />
             <span style={{ fontSize: '14px', fontWeight: '600' }}>Hata Logları</span>
           </div>
+
+          <div
+            onClick={() => handleTabChange('ai-alerts')}
+            style={{
+              padding: '15px 20px',
+              cursor: 'pointer',
+              background: activeTab === 'ai-alerts' ? '#000' : 'transparent',
+              borderLeft: activeTab === 'ai-alerts' ? '4px solid #fff' : '4px solid transparent',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.2s',
+              color: activeTab === 'ai-alerts' ? '#fff' : '#ccc'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'ai-alerts') {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.color = '#fff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'ai-alerts') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#ccc';
+              }
+            }}
+          >
+            <Bot size={20} />
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>AI Uyarılar</span>
+          </div>
         </div>
 
         {/* Logout Button */}
@@ -201,4 +231,3 @@ export default function AdminLayout({ children, activeTab: externalActiveTab, on
     </div>
   );
 }
-

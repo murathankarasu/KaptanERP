@@ -4,6 +4,7 @@ import { logout } from '../services/authService';
 import { getCurrentUser } from '../utils/getCurrentUser';
 import { hasPermission, getAllPermissions, PermissionType } from '../types/permissions';
 import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info, Brain, HelpCircle, X as CloseIcon } from 'lucide-react';
+import AIBotWidget from './AIBotWidget';
 
 interface LayoutProps {
   children: ReactNode;
@@ -553,6 +554,14 @@ export default function Layout({ children }: LayoutProps) {
           )}
         </>
       )}
+
+      <AIBotWidget
+        context={{
+          route: location.pathname,
+          title: currentHelp?.title,
+          helpItems: currentHelp?.items || []
+        }}
+      />
     </div>
   );
 }
