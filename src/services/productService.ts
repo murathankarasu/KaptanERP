@@ -15,7 +15,7 @@ export interface UnitConversion {
 
 export interface Product {
   id?: string;
-  sku: string;
+  sku?: string;
   name: string;
   category?: string;
   baseUnit: string;

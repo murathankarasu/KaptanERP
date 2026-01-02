@@ -2,6 +2,8 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { logout } from '../services/authService';
 import { getCurrentUser } from '../utils/getCurrentUser';
+import { getCurrentCompany } from '../utils/getCurrentCompany';
+import { getCompanyById } from '../services/companyService';
 import { hasPermission, getAllPermissions, PermissionType } from '../types/permissions';
 import { LogOut, LayoutDashboard, Package, ArrowDownCircle, BarChart3, Users, ShoppingCart, Warehouse, Shield, Activity, FileText, UserCircle, Truck, CreditCard, CalendarRange, BookOpen, ClipboardList, FileQuestion, DollarSign, Inbox, FileCheck, Tags, UserCircle2, Info, Brain, HelpCircle, X as CloseIcon } from 'lucide-react';
 import AIBotWidget from './AIBotWidget';
@@ -13,6 +15,7 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [showHelp, setShowHelp] = useState(false);
+  const [companyData, setCompanyData] = useState<any>(null);
 
   const handleLogout = async () => {
     try {
@@ -29,12 +32,28 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const currentUser = getCurrentUser();
+  const currentCompany = getCurrentCompany();
   const userRole = currentUser?.role;
   const isAdmin = userRole === 'admin';
   const isManager = userRole === 'manager';
   
   // Manager tüm yetkilere sahiptir
   const userPermissions = isManager ? getAllPermissions() : (currentUser?.permissions || []);
+
+  // Şirket bilgilerini yükle
+  useEffect(() => {
+    const loadCompanyData = async () => {
+      if (currentCompany?.companyId) {
+        try {
+          const company = await getCompanyById(currentCompany.companyId);
+          setCompanyData(company);
+        } catch (error) {
+          console.error('Şirket bilgileri yüklenirken hata:', error);
+        }
+      }
+    };
+    loadCompanyData();
+  }, [currentCompany?.companyId]);
 
   // Menü grupları
   const sections = [
@@ -380,8 +399,25 @@ export default function Layout({ children }: LayoutProps) {
       }}>
         <div style={{ padding: '0 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <img src="/Kaptan.png" alt="Kaptan Logo" style={{ width: '40px', height: '40px' }} />
-            <h1 style={{ fontSize: '26px', fontWeight: '700', margin: 0, letterSpacing: '-0.5px' }}>Kaptan</h1>
+            {companyData?.logoUrl ? (
+              <img 
+                src={companyData.logoUrl} 
+                alt={`${companyData.name} Logo`} 
+                style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  objectFit: 'contain',
+                  background: '#fff',
+                  padding: '4px',
+                  borderRadius: '4px'
+                }} 
+              />
+            ) : (
+              <img src="/Kaptan.png" alt="Kaptan Logo" style={{ width: '40px', height: '40px' }} />
+            )}
+            <h1 style={{ fontSize: '26px', fontWeight: '700', margin: 0, letterSpacing: '-0.5px' }}>
+              {companyData?.name || currentUser?.companyName || 'Kaptan'}
+            </h1>
           </div>
           <p style={{ fontSize: '11px', color: '#999', marginTop: '2px', letterSpacing: '0.5px', textTransform: 'uppercase' }}>İş Yönetim Sistemi</p>
         </div>
@@ -467,8 +503,27 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, overflow: 'auto', background: '#ffffff' }}>
-        {children}
+      <main style={{ flex: 1, overflow: 'auto', background: '#ffffff', display: 'flex', flexDirection: 'column' }}>
+        {/* Kullanıcı Adı Header */}
+        <div style={{
+          padding: '12px 24px',
+          background: '#fff',
+          borderBottom: '1px solid #e0e0e0',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <UserCircle size={18} color="#666" />
+            <span style={{ fontSize: '14px', color: '#333', fontWeight: 500 }}>
+              {currentUser?.username || currentUser?.fullName || 'Kullanıcı'}
+            </span>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {children}
+        </div>
       </main>
 
       {/* Yardım Butonu */}

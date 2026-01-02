@@ -188,8 +188,8 @@ Sadece JSON döndür, açıklama yapma.`;
   }
 };
 
-// Genel ERP asistanı - doğal dilde soru-cevap
-export const askERPAI = async (question: string, context: any): Promise<AINaturalAnswer> => {
+// Genel Yönetim asistanı - doğal dilde soru-cevap
+export const askYonetimAI = async (question: string, context: any): Promise<AINaturalAnswer> => {
   try {
     if (!apiKey || apiKey === 'your_openai_api_key_here') {
       return {
@@ -202,7 +202,7 @@ export const askERPAI = async (question: string, context: any): Promise<AINatura
       return { answer: 'Lütfen bir soru yazın.' };
     }
 
-    const prompt = `Aşağıda bir KOBİ için ERP sisteminden özet veriler var. Kullanıcı Türkçe bir soru soruyor.
+    const prompt = `Aşağıda bir KOBİ için Yönetim sisteminden özet veriler var. Kullanıcı Türkçe bir soru soruyor.
 Sen de bu verileri kullanarak kısa, net, maddelemeli bir cevap ver.
 
 Veri Özeti (JSON):
@@ -217,7 +217,7 @@ Cevabını sade Türkçe ile ver, teknik detay boğma.`;
       messages: [
         {
           role: 'system',
-          content: 'Sen KOBİ odaklı bir ERP asistanısın. Stok, sipariş, müşteri ve personel verilerini yorumlayıp kısa Türkçe cevaplar verirsin.'
+          content: 'Sen KOBİ odaklı bir Yönetim asistanısın. Stok, sipariş, müşteri ve personel verilerini yorumlayıp kısa Türkçe cevaplar verirsin.'
         },
         { role: 'user', content: prompt }
       ],
@@ -259,7 +259,7 @@ export const askAIBot = async (
       help: context.helpItems || []
     };
 
-    const systemContent = `Sen Kaptan ERP uygulamasında ekran yardım asistanısın.
+    const systemContent = `Sen Kaptan Yönetim uygulamasında ekran yardım asistanısın.
 Kullanıcıya kısa, net ve uygulanabilir adımlar ver.
 Bağlam dışına çıkma; veri yoksa varsayım olduğunu belirt.`;
 
@@ -367,7 +367,7 @@ ${JSON.stringify(payload, null, 2)}`;
         {
           role: 'system',
           content:
-            'Sen ERP sistemlerinde güvenlik/operasyon analisti olarak anomali tespiti yaparsın. Kısa, net ve uygulanabilir uyarılar üretirsin.'
+            'Sen Yönetim sistemlerinde güvenlik/operasyon analisti olarak anomali tespiti yaparsın. Kısa, net ve uygulanabilir uyarılar üretirsin.'
         },
         {
           role: 'user',
@@ -445,7 +445,7 @@ ${JSON.stringify(eventPayload, null, 2)}`;
         {
           role: 'system',
           content:
-            'Sen ERP sistemlerinde finansal anomali analisti olarak calisiyorsun. Kisa, net ve uygulanabilir uyarilar verirsin.'
+            'Sen Yönetim sistemlerinde finansal anomali analisti olarak calisiyorsun. Kisa, net ve uygulanabilir uyarilar verirsin.'
         },
         { role: 'user', content: prompt }
       ],
@@ -630,7 +630,7 @@ Lütfen şu formatta JSON döndür:
       messages: [
         {
           role: 'system',
-          content: 'Sen bir ERP sistem uzmanısın. Günlük stok raporları oluşturuyorsun.'
+          content: 'Sen bir Yönetim sistem uzmanısın. Günlük stok raporları oluşturuyorsun.'
         },
         {
           role: 'user',

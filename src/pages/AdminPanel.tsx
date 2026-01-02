@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../components/AdminLayout';
 import { getUsers, addUser, updateUser, deleteUser, User } from '../services/userService';
 import { getErrorLogs, resolveErrorLog, ErrorLog } from '../services/userService';
-import { getCompanies, Company, addCompany } from '../services/companyService';
+import { getCompanies, Company, addCompany, updateCompany } from '../services/companyService';
+import { uploadCompanyLogo, deleteCompanyLogo } from '../services/storageService';
 import { runHealthCheck, getLatestHealthReport, HealthReport } from '../services/systemHealthService';
 import { getInviteCodes, InviteCode } from '../services/inviteService';
 import { getActivityLogs, ActivityLog } from '../services/activityLogService';
@@ -16,12 +17,14 @@ import { getQuotes } from '../services/quoteService';
 import { getPurchaseOrders } from '../services/procurementService';
 import { getStockEntries } from '../services/stockService';
 import { getJournalEntries } from '../services/financeService';
-import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound, Bot } from 'lucide-react';
+import { Plus, X, Edit, Save, Shield, CheckCircle, Eye, EyeOff, RefreshCcw, Copy, KeyRound, Bot, Search, QrCode } from 'lucide-react';
 import { formatDate } from '../utils/formatDate';
+import { getStockEntryByBarcode } from '../services/stockService';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'users' | 'errors' | 'ai-alerts'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'errors' | 'ai-alerts' | 'activity-logs'>('users');
+  const [uploadingLogo, setUploadingLogo] = useState<Record<string, boolean>>({});
   const [users, setUsers] = useState<User[]>([]);
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
   const [aiAlerts, setAiAlerts] = useState<AIAnomalyAlert[]>([]);
@@ -53,6 +56,12 @@ export default function AdminPanel() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRunLoading, setAiRunLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false);
+  const [barcodeSearch, setBarcodeSearch] = useState('');
+  const [barcodeResult, setBarcodeResult] = useState<any>(null);
+  const [barcodeSearchLoading, setBarcodeSearchLoading] = useState(false);
+  const [barcodeSearchError, setBarcodeSearchError] = useState('');
 
 
   useEffect(() => {
@@ -75,8 +84,12 @@ export default function AdminPanel() {
       loadCompanies();
       loadInvites();
       loadHealthLatest();
+    } else if (activeTab === 'companies') {
+      loadCompanies();
     } else if (activeTab === 'errors') {
       loadErrorLogs();
+    } else if (activeTab === 'activity-logs') {
+      loadActivityLogs();
     } else {
       loadCompanies();
       loadAIAlerts();
@@ -90,6 +103,80 @@ export default function AdminPanel() {
       setCompanies(data);
     } catch (error) {
       console.error('Şirketler yüklenirken hata:', error);
+    }
+  };
+
+  const handleLogoUpload = async (companyId: string, file: File) => {
+    if (!companyId) {
+      alert('Şirket ID bulunamadı');
+      return;
+    }
+
+    try {
+      setUploadingLogo(prev => ({ ...prev, [companyId]: true }));
+      
+      // Eski logoyu sil
+      const company = companies.find(c => c.id === companyId);
+      if (company?.logoUrl) {
+        await deleteCompanyLogo(companyId, company.logoUrl);
+      }
+
+      // Yeni logoyu yükle
+      const logoUrl = await uploadCompanyLogo(file, companyId);
+      
+      // Şirket bilgilerini güncelle
+      await updateCompany(companyId, { logoUrl });
+      
+      alert('Logo başarıyla yüklendi!');
+      await loadCompanies();
+    } catch (error: any) {
+      alert('Logo yüklenirken hata: ' + (error.message || error));
+    } finally {
+      setUploadingLogo(prev => ({ ...prev, [companyId]: false }));
+    }
+  };
+
+  const handleLogoDelete = async (companyId: string) => {
+    if (!confirm('Logoyu silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const company = companies.find(c => c.id === companyId);
+      if (company?.logoUrl) {
+        await deleteCompanyLogo(companyId, company.logoUrl);
+        await updateCompany(companyId, { logoUrl: undefined });
+        alert('Logo başarıyla silindi!');
+        await loadCompanies();
+      }
+    } catch (error: any) {
+      alert('Logo silinirken hata: ' + (error.message || error));
+    }
+  };
+
+  const handleBarcodeSearch = async () => {
+    if (!barcodeSearch.trim()) {
+      setBarcodeSearchError('Lütfen barkod numarası girin');
+      return;
+    }
+
+    setBarcodeSearchLoading(true);
+    setBarcodeSearchError('');
+    setBarcodeResult(null);
+
+    try {
+      // Tüm şirketlerde ara (admin için)
+      const entry = await getStockEntryByBarcode(barcodeSearch.trim());
+      
+      if (!entry) {
+        setBarcodeSearchError('Bu barkod ile kayıtlı ürün bulunamadı');
+        setBarcodeSearchLoading(false);
+        return;
+      }
+
+      setBarcodeResult(entry);
+    } catch (err: any) {
+      setBarcodeSearchError('Arama sırasında hata oluştu: ' + (err.message || err));
+    } finally {
+      setBarcodeSearchLoading(false);
     }
   };
 
@@ -156,6 +243,20 @@ export default function AdminPanel() {
       console.error('AI uyarıları yüklenirken hata:', error);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const loadActivityLogs = async () => {
+    try {
+      setActivityLogsLoading(true);
+      const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
+      const data = await getActivityLogs({ companyId, limit: 500 });
+      setActivityLogs(data);
+    } catch (error) {
+      console.error('Aktivite logları yüklenirken hata:', error);
+      alert('Aktivite logları yüklenirken bir hata oluştu');
+    } finally {
+      setActivityLogsLoading(false);
     }
   };
 
@@ -1131,6 +1232,216 @@ export default function AdminPanel() {
         )}
 
         {/* Hata Logları */}
+        {activeTab === 'companies' && (
+          <>
+            {/* Barkod Sorgulama */}
+            <div style={{ marginBottom: '30px', padding: '20px', background: '#fff', border: '2px solid #000', borderRadius: '8px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <QrCode size={24} />
+                Barkod Sorgulama
+              </h3>
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <input
+                  type="text"
+                  value={barcodeSearch}
+                  onChange={(e) => setBarcodeSearch(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleBarcodeSearch();
+                    }
+                  }}
+                  placeholder="Barkod numarasını girin"
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    border: '2px solid #000',
+                    borderRadius: '4px',
+                    fontSize: '16px',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <button
+                  onClick={handleBarcodeSearch}
+                  disabled={barcodeSearchLoading || !barcodeSearch.trim()}
+                  className="btn btn-primary"
+                  style={{
+                    padding: '12px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '16px'
+                  }}
+                >
+                  <Search size={20} />
+                  {barcodeSearchLoading ? 'Aranıyor...' : 'Ara'}
+                </button>
+                {barcodeResult && (
+                  <button
+                    onClick={() => {
+                      const companyCode = companies.find(c => c.id === barcodeResult.companyId)?.code || '';
+                      window.open(`/barcode-scanner?companyCode=${encodeURIComponent(companyCode)}&barcode=${barcodeResult.barcode}`, '_blank');
+                    }}
+                    className="btn btn-secondary"
+                    style={{
+                      padding: '12px 24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '16px'
+                    }}
+                  >
+                    <QrCode size={20} />
+                    Fişi Aç
+                  </button>
+                )}
+              </div>
+              {barcodeSearchError && (
+                <div style={{
+                  padding: '12px',
+                  background: '#fee',
+                  border: '2px solid #f00',
+                  borderRadius: '4px',
+                  color: '#c00',
+                  marginBottom: '15px'
+                }}>
+                  {barcodeSearchError}
+                </div>
+              )}
+              {barcodeResult && (
+                <div style={{
+                  padding: '15px',
+                  background: '#f8f9fa',
+                  border: '2px solid #000',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Barkod</div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'monospace' }}>{barcodeResult.barcode}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Ürün Adı</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600 }}>{barcodeResult.materialName}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>SKU</div>
+                      <div style={{ fontSize: '14px', fontFamily: 'monospace' }}>{barcodeResult.sku || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Kategori</div>
+                      <div style={{ fontSize: '14px' }}>{barcodeResult.category || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Depo</div>
+                      <div style={{ fontSize: '14px' }}>{barcodeResult.warehouse || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px', textTransform: 'uppercase' }}>Giriş Tarihi</div>
+                      <div style={{ fontSize: '14px' }}>{formatDate(barcodeResult.arrivalDate)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '20px' }}>Şirket Yönetimi</h2>
+              <div className="table-container">
+                {companies.length === 0 ? (
+                  <div style={{ padding: '30px', textAlign: 'center', color: '#666' }}>
+                    Henüz şirket kaydı yok.
+                  </div>
+                ) : (
+                  <table className="excel-table">
+                    <thead>
+                      <tr>
+                        <th>Şirket Adı</th>
+                        <th>Kod</th>
+                        <th>Logo</th>
+                        <th>Durum</th>
+                        <th>İşlem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {companies.map((company) => (
+                        <tr key={company.id}>
+                          <td style={{ fontWeight: 600 }}>{company.name}</td>
+                          <td style={{ fontFamily: 'monospace' }}>{company.code || '-'}</td>
+                          <td>
+                            {company.logoUrl ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <img
+                                  src={company.logoUrl}
+                                  alt={`${company.name} Logo`}
+                                  style={{
+                                    width: '60px',
+                                    height: '60px',
+                                    objectFit: 'contain',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    background: '#fff'
+                                  }}
+                                />
+                                <button
+                                  onClick={() => handleLogoDelete(company.id!)}
+                                  className="btn btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: '11px' }}
+                                >
+                                  Sil
+                                </button>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#999' }}>Logo yok</span>
+                            )}
+                          </td>
+                          <td>
+                            <span style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              fontSize: '12px',
+                              background: company.isActive ? '#e8f5e9' : '#ffebee',
+                              color: company.isActive ? '#2e7d32' : '#c62828'
+                            }}>
+                              {company.isActive ? 'Aktif' : 'Pasif'}
+                            </span>
+                          </td>
+                          <td>
+                            <label
+                              className="btn btn-secondary"
+                              style={{
+                                padding: '6px 12px',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                                display: 'inline-block',
+                                marginRight: '8px'
+                              }}
+                            >
+                              {uploadingLogo[company.id || ''] ? 'Yükleniyor...' : company.logoUrl ? 'Logo Değiştir' : 'Logo Yükle'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file && company.id) {
+                                    handleLogoUpload(company.id, file);
+                                  }
+                                  e.target.value = ''; // Reset input
+                                }}
+                                disabled={uploadingLogo[company.id || '']}
+                              />
+                            </label>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
         {activeTab === 'errors' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1334,6 +1645,104 @@ export default function AdminPanel() {
                               <CheckCircle size={14} />
                               Çöz
                             </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Aktivite Logları */}
+        {activeTab === 'activity-logs' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: '700', color: '#000' }}>
+                Aktivite Logları
+              </h2>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#000' }}>Şirket Filtresi:</label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '2px solid #000',
+                    borderRadius: '0',
+                    fontSize: '14px',
+                    minWidth: '200px'
+                  }}
+                >
+                  <option value="all">Tüm Şirketler</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>{company.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="table-container">
+              {activityLogsLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center' }}>Yükleniyor...</div>
+              ) : activityLogs.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
+                  Aktivite logu bulunmamaktadır.
+                </div>
+              ) : (
+                <table className="excel-table">
+                  <thead>
+                    <tr>
+                      <th>Tarih/Saat</th>
+                      <th>Kullanıcı</th>
+                      <th>Personel</th>
+                      <th>İşlem</th>
+                      <th>Modül</th>
+                      <th>Detay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activityLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td style={{ fontSize: '12px' }}>{formatDate(log.timestamp)}</td>
+                        <td>
+                          <div style={{ fontSize: '13px', fontWeight: '500' }}>
+                            {log.username || log.userEmail || log.userId || '-'}
+                          </div>
+                        </td>
+                        <td>
+                          {log.personnelName ? (
+                            <div>
+                              <div style={{ fontSize: '13px', fontWeight: '500' }}>{log.personnelName}</div>
+                              {log.personnelId && (
+                                <div style={{ fontSize: '11px', color: '#666' }}>ID: {log.personnelId}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#999' }}>-</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '13px' }}>{log.action}</td>
+                        <td>
+                          <span style={{
+                            fontSize: '11px',
+                            padding: '4px 8px',
+                            background: '#000',
+                            color: '#fff',
+                            borderRadius: '2px'
+                          }}>
+                            {log.module}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#666', maxWidth: '400px' }}>
+                          {log.details ? (
+                            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {log.details}
+                            </div>
+                          ) : (
+                            '-'
                           )}
                         </td>
                       </tr>

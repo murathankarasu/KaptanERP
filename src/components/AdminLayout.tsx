@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, AlertTriangle, LogOut, Bot } from 'lucide-react';
+import { Users, AlertTriangle, LogOut, Bot, Activity, Building2 } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab?: 'users' | 'errors' | 'ai-alerts';
-  onTabChange?: (tab: 'users' | 'errors' | 'ai-alerts') => void;
+  activeTab?: 'users' | 'companies' | 'errors' | 'ai-alerts' | 'activity-logs';
+  onTabChange?: (tab: 'users' | 'companies' | 'errors' | 'ai-alerts' | 'activity-logs') => void;
 }
 
 export default function AdminLayout({ children, activeTab: externalActiveTab, onTabChange }: AdminLayoutProps) {
   const navigate = useNavigate();
-  const [internalActiveTab, setInternalActiveTab] = useState<'users' | 'errors' | 'ai-alerts'>('users');
+  const [internalActiveTab, setInternalActiveTab] = useState<'users' | 'companies' | 'errors' | 'ai-alerts' | 'activity-logs'>('users');
   
   const activeTab = externalActiveTab !== undefined ? externalActiveTab : internalActiveTab;
   
-  const handleTabChange = (tab: 'users' | 'errors' | 'ai-alerts') => {
+  const handleTabChange = (tab: 'users' | 'companies' | 'errors' | 'ai-alerts' | 'activity-logs') => {
     if (onTabChange) {
       onTabChange(tab);
     } else {
@@ -119,6 +119,36 @@ export default function AdminLayout({ children, activeTab: externalActiveTab, on
           </div>
 
           <div
+            onClick={() => handleTabChange('companies')}
+            style={{
+              padding: '15px 20px',
+              cursor: 'pointer',
+              background: activeTab === 'companies' ? '#000' : 'transparent',
+              borderLeft: activeTab === 'companies' ? '4px solid #fff' : '4px solid transparent',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.2s',
+              color: activeTab === 'companies' ? '#fff' : '#ccc'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'companies') {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.color = '#fff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'companies') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#ccc';
+              }
+            }}
+          >
+            <Building2 size={20} />
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Şirket Yönetimi</span>
+          </div>
+
+          <div
             onClick={() => handleTabChange('errors')}
             style={{
               padding: '15px 20px',
@@ -176,6 +206,36 @@ export default function AdminLayout({ children, activeTab: externalActiveTab, on
           >
             <Bot size={20} />
             <span style={{ fontSize: '14px', fontWeight: '600' }}>AI Uyarılar</span>
+          </div>
+
+          <div
+            onClick={() => handleTabChange('activity-logs')}
+            style={{
+              padding: '15px 20px',
+              cursor: 'pointer',
+              background: activeTab === 'activity-logs' ? '#000' : 'transparent',
+              borderLeft: activeTab === 'activity-logs' ? '4px solid #fff' : '4px solid transparent',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.2s',
+              color: activeTab === 'activity-logs' ? '#fff' : '#ccc'
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'activity-logs') {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.color = '#fff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'activity-logs') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#ccc';
+              }
+            }}
+          >
+            <Activity size={20} />
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Aktivite Logları</span>
           </div>
         </div>
 

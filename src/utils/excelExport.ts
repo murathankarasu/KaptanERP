@@ -2,22 +2,76 @@ import * as XLSX from 'xlsx';
 import { StockEntry, StockOutput, StockStatus } from '../services/stockService';
 
 export const exportStockEntriesToExcel = (entries: StockEntry[], filename: string = 'stok_girisleri.xlsx') => {
-  const data = entries.map(entry => ({
-    'Geliş Tarihi': entry.arrivalDate
-      ? new Date(entry.arrivalDate as any).toLocaleDateString('tr-TR')
-      : '',
-    'Malzeme Adı': entry.materialName,
-    'Kategori': entry.category,
-    'Birim': entry.unit,
-    'Gelen Miktar': entry.quantity,
-    'Birim Fiyat': entry.unitPrice,
-    'Tedarikçi': entry.supplier,
-    'Not': entry.note || ''
-  }));
+  const data = entries.map(entry => {
+    // Tarihi Date objesi olarak tut (Excel otomatik formatlar)
+    let arrivalDate: Date | string = '';
+    if (entry.arrivalDate) {
+      if (entry.arrivalDate instanceof Date) {
+        arrivalDate = entry.arrivalDate;
+      } else if (entry.arrivalDate.toDate && typeof entry.arrivalDate.toDate === 'function') {
+        // Firestore Timestamp
+        arrivalDate = entry.arrivalDate.toDate();
+      } else if (typeof entry.arrivalDate === 'string' || typeof entry.arrivalDate === 'number') {
+        arrivalDate = new Date(entry.arrivalDate);
+      } else {
+        arrivalDate = new Date(entry.arrivalDate as any);
+      }
+    }
+    
+    return {
+      'Geliş Tarihi': arrivalDate,
+      'Malzeme Adı': entry.materialName,
+      'Kategori': entry.category,
+      'Birim': entry.unit,
+      'Gelen Miktar': entry.quantity,
+      'Birim Fiyat': entry.unitPrice,
+      'Tedarikçi': entry.supplier,
+      'Not': entry.note || ''
+    };
+  });
 
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Stok Girişleri');
+  
+  // Tarih sütununu bul ve formatla
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  const headerRow = 0;
+  let dateColIndex = -1;
+  
+  // Başlık satırında "Geliş Tarihi" sütununu bul
+  for (let col = range.s.c; col <= range.e.c; col++) {
+    const cellAddress = XLSX.utils.encode_cell({ r: headerRow, c: col });
+    const cell = ws[cellAddress];
+    if (cell && cell.v && String(cell.v).includes('Geliş Tarihi')) {
+      dateColIndex = col;
+      break;
+    }
+  }
+  
+  // Tarih sütununu formatla (Excel tarih formatı: dd.mm.yyyy)
+  if (dateColIndex >= 0) {
+    for (let row = headerRow + 1; row <= range.e.r; row++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: row, c: dateColIndex });
+      const cell = ws[cellAddress];
+      if (cell && cell.v) {
+        // Excel'in anlayacağı tarih formatına çevir
+        if (cell.v instanceof Date) {
+          // Date objesi zaten doğru formatta
+          cell.z = 'dd.mm.yyyy'; // Excel format kodu
+          cell.t = 'd'; // Excel cell type: date
+        } else if (typeof cell.v === 'string' && cell.v.trim() !== '') {
+          // String tarihi Date'e çevir
+          const date = new Date(cell.v);
+          if (!isNaN(date.getTime())) {
+            cell.v = date;
+            cell.z = 'dd.mm.yyyy';
+            cell.t = 'd'; // Excel cell type: date
+          }
+        }
+      }
+    }
+  }
   
   // Sütun genişliklerini ayarla
   const colWidths = [

@@ -6,6 +6,7 @@ export interface Company {
   name: string;
   code?: string; // Optional, can be generated
   description?: string;
+  logoUrl?: string; // Firebase Storage URL
   isActive?: boolean;
   createdAt?: Date;
   updatedAt?: Date;

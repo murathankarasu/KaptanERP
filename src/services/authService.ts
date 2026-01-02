@@ -1,7 +1,5 @@
 import { 
-  signInWithPopup, 
-  signOut, 
-  User 
+  signOut
 } from 'firebase/auth';
 import { 
   collection,
@@ -9,7 +7,7 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../firebase/config';
+import { auth, db } from '../firebase/config';
 
 export interface AllowedUser {
   email: string;
@@ -41,26 +39,6 @@ export const checkIfUserAllowed = async (email: string): Promise<boolean> => {
   } catch (error) {
     console.error('Kullanıcı kontrolü hatası:', error);
     return false;
-  }
-};
-
-export const signInWithGoogle = async (): Promise<User | null> => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
-    
-    // Kullanıcının izinli olup olmadığını kontrol et
-    const isAllowed = await checkIfUserAllowed(user.email || '');
-    
-    if (!isAllowed) {
-      await signOut(auth);
-      throw new Error('Bu Google hesabı ile giriş yapma yetkiniz bulunmamaktadır.');
-    }
-    
-    return user;
-  } catch (error: any) {
-    console.error('Google ile giriş hatası:', error);
-    throw error;
   }
 };
 

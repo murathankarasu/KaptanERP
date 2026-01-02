@@ -4,6 +4,7 @@ import { addOrder, getOrders, updateOrder, Order, OrderItem } from '../services/
 import { formatDate } from '../utils/formatDate';
 import { getCustomers, Customer } from '../services/customerService';
 import { getPriceRules, PriceRule, selectPriceRule } from '../services/priceService';
+import { getAllStockStatus } from '../services/stockService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
 import { Plus, X, Edit, Save, ShoppingCart, CheckCircle, Clock, XCircle, Download } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [priceRules, setPriceRules] = useState<PriceRule[]>([]);
+  const [stockStatus, setStockStatus] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,7 +50,18 @@ export default function OrderManagement() {
     loadOrders();
     loadCustomers();
     loadPrices();
+    loadStockStatus();
   }, [filters]);
+
+  const loadStockStatus = async () => {
+    try {
+      const currentCompany = getCurrentCompany();
+      const data = await getAllStockStatus(currentCompany?.companyId);
+      setStockStatus(data);
+    } catch (error) {
+      console.error('Stok durumu yüklenirken hata:', error);
+    }
+  };
   const loadPrices = async () => {
     try {
       const currentCompany = getCurrentCompany();
@@ -610,13 +623,33 @@ export default function OrderManagement() {
                   Ürün Ekle
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="Malzeme Adı"
+                  <select
                     value={newItem.materialName}
-                    onChange={(e) => setNewItem({ ...newItem, materialName: e.target.value })}
-                    style={{ padding: '10px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
-                  />
+                    onChange={(e) => {
+                      const material = stockStatus.find(s => s.materialName === e.target.value);
+                      setNewItem({
+                        ...newItem,
+                        materialName: e.target.value,
+                        unit: material?.unit || ''
+                      });
+                    }}
+                    style={{ padding: '10px', border: '2px solid #000', borderRadius: '0', fontSize: '14px', background: 'white' }}
+                    required
+                  >
+                    <option value="">Stokta Olan Malzemelerden Seçiniz</option>
+                    {stockStatus
+                      .filter(s => s.currentStock > 0)
+                      .map(m => (
+                        <option key={m.materialName} value={m.materialName}>
+                          {m.materialName} {m.warehouse && `(${m.warehouse})`} (Mevcut: {m.currentStock} {m.unit})
+                        </option>
+                      ))}
+                  </select>
+                  {stockStatus.filter(s => s.currentStock > 0).length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px', gridColumn: '1 / -1' }}>
+                      Stokta ürün bulunmamaktadır.
+                    </div>
+                  )}
                   <input
                     type="number"
                     step="0.01"

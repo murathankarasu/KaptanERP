@@ -6,7 +6,7 @@ import { getAllStockStatus, getStockEntries, getStockOutputs } from '../services
 import { getOrders } from '../services/orderService';
 import { getCustomers } from '../services/customerService';
 import { getPersonnel } from '../services/personnelService';
-import { generateAIStatusReport, generateDailyAIReport, askERPAI, AIStatusReport, AIDailyReport, AINaturalAnswer } from '../services/aiService';
+import { generateAIStatusReport, generateDailyAIReport, askYonetimAI, AIStatusReport, AIDailyReport, AINaturalAnswer } from '../services/aiService';
 import { addErrorLog } from '../services/userService';
 import { Brain, MessageCircle, BarChart3, ListChecks } from 'lucide-react';
 
@@ -68,7 +68,7 @@ const AIAssistantPage = () => {
         stock: stock.slice(0, 100)
       };
 
-      const answer = await askERPAI(question, context);
+      const answer = await askYonetimAI(question, context);
       setQaAnswer(answer);
     } catch (error: any) {
       console.error('AI asistan hatası:', error);

@@ -190,35 +190,29 @@ const SettingsPage = () => {
           Bu sayfadan şirket verilerinizi indirebilir, silebilir, hesabınızı kapatabilir ve sorun bildirebilirsiniz.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ border: '1px solid #ddd', padding: '14px', background: '#fff' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px', marginBottom: '8px' }}>Veri İndirme</h3>
-            <p style={{ fontSize: '12px', color: '#555', marginBottom: '10px' }}>
-              Şirketinize ait tüm temel verileri tek bir Excel dosyası olarak indirebilirsiniz. Bu işlem sadece şirket yöneticisi için aktiftir.
-            </p>
-            <button className="btn btn-primary" onClick={exportAll} disabled={busy || !isManager}>
-              <FileDown size={14} /> Tüm Verileri Excel İndir
-          </button>
-            {!isManager && (
-              <div style={{ marginTop: '6px', fontSize: '11px', color: '#999' }}>
-                Bu işlem için şirket yöneticinizle iletişime geçin.
-              </div>
-            )}
-          </div>
+          {isManager && (
+            <div style={{ border: '1px solid #ddd', padding: '14px', background: '#fff' }}>
+              <h3 style={{ marginTop: 0, fontSize: '16px', marginBottom: '8px' }}>Veri İndirme</h3>
+              <p style={{ fontSize: '12px', color: '#555', marginBottom: '10px' }}>
+                Şirketinize ait tüm temel verileri tek bir Excel dosyası olarak indirebilirsiniz.
+              </p>
+              <button className="btn btn-primary" onClick={exportAll} disabled={busy}>
+                <FileDown size={14} /> Tüm Verileri Excel İndir
+              </button>
+            </div>
+          )}
 
-          <div style={{ border: '1px solid #ddd', padding: '14px', background: '#fff' }}>
-            <h3 style={{ marginTop: 0, fontSize: '16px', marginBottom: '8px', color: '#b00000' }}>Şirket Verilerini Sil</h3>
-            <p style={{ fontSize: '12px', color: '#555', marginBottom: '10px' }}>
-              Bu işlem seçili şirketin ERP verilerini kalıcı olarak siler. Geri alınamaz ve sadece şirket yöneticisi tarafından yapılabilir.
-            </p>
-            <button className="btn btn-secondary" style={{ background: '#dc3545', borderColor: '#dc3545' }} onClick={deleteAll} disabled={busy || !isManager}>
-            <Trash2 size={14} /> Tüm Verileri Sil (Geri Alınamaz)
-          </button>
-            {!isManager && (
-              <div style={{ marginTop: '6px', fontSize: '11px', color: '#999' }}>
-                Sadece şirket yöneticileri verileri silebilir.
-              </div>
-            )}
-          </div>
+          {isManager && (
+            <div style={{ border: '1px solid #ddd', padding: '14px', background: '#fff' }}>
+              <h3 style={{ marginTop: 0, fontSize: '16px', marginBottom: '8px', color: '#b00000' }}>Şirket Verilerini Sil</h3>
+              <p style={{ fontSize: '12px', color: '#555', marginBottom: '10px' }}>
+                Bu işlem seçili şirketin Yönetim verilerini kalıcı olarak siler. Geri alınamaz.
+              </p>
+              <button className="btn btn-secondary" style={{ background: '#dc3545', borderColor: '#dc3545' }} onClick={deleteAll} disabled={busy}>
+                <Trash2 size={14} /> Tüm Verileri Sil (Geri Alınamaz)
+              </button>
+            </div>
+          )}
 
           <div style={{ border: '1px solid #ddd', padding: '14px', background: '#fff' }}>
             <h3 style={{ marginTop: 0, fontSize: '16px', marginBottom: '8px' }}>Hesabım</h3>

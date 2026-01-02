@@ -7,6 +7,7 @@ import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { PERMISSIONS, PERMISSION_GROUPS, PermissionType } from '../types/permissions';
 import { Plus, X, Edit, Save, Users } from 'lucide-react';
 import { getCurrentUser } from '../utils/getCurrentUser';
+import { addActivityLog } from '../services/activityLogService';
 
 export default function PersonnelManagement() {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -115,18 +116,109 @@ export default function PersonnelManagement() {
 
     try {
       const currentCompany = getCurrentCompany();
+      const currentUser = getCurrentUser();
       const { permissions, ...restFormData } = formData;
+      
+      // Eski personel bilgilerini al (güncelleme için)
+      let oldPersonnel: Personnel | null = null;
+      if (editingId) {
+        const { getPersonnelById } = await import('../services/personnelService');
+        oldPersonnel = await getPersonnelById(editingId);
+      }
+      
       const personnelData = {
         ...restFormData,
-        permissions: permissions.length > 0 ? permissions : undefined,
+        permissions: permissions.length > 0 ? permissions : [], // Boş array olarak gönder
         companyId: currentCompany?.companyId
       };
       
       if (editingId) {
-        await updatePersonnel(editingId, personnelData);
+        // Güncelleme işlemi
+        const updatedPersonnel = await updatePersonnel(editingId, personnelData);
+        
+        // Doğrulama: Güncellenen veriyi kontrol et
+        const finalPermissions = updatedPersonnel.permissions || [];
+        const expectedPermissions = permissions;
+        
+        // Permissions karşılaştırması
+        const permissionsMatch = 
+          finalPermissions.length === expectedPermissions.length &&
+          finalPermissions.every(p => expectedPermissions.includes(p)) &&
+          expectedPermissions.every(p => finalPermissions.includes(p));
+        
+        if (!permissionsMatch) {
+          const errorMsg = `Yetki güncelleme başarısız! Beklenen: [${expectedPermissions.join(', ')}], Güncellenen: [${finalPermissions.join(', ')}]`;
+          console.error(errorMsg);
+          await addErrorLog(
+            errorMsg,
+            'PersonnelManagement',
+            currentUser?.id,
+            currentUser?.username
+          );
+          
+          // Activity log ekle
+          await addActivityLog({
+            userId: currentUser?.id,
+            username: currentUser?.username,
+            userEmail: currentUser?.email,
+            personnelId: editingId,
+            personnelName: formData.name,
+            action: `Personel yetki güncelleme başarısız: ${formData.name}`,
+            module: 'PersonnelManagement',
+            details: JSON.stringify({
+              expected: expectedPermissions,
+              actual: finalPermissions,
+              error: 'Yetki güncelleme doğrulaması başarısız'
+            }),
+            companyId: currentCompany?.companyId
+          });
+          
+          alert('Hata: Yetki güncelleme başarısız oldu. Lütfen tekrar deneyin veya admin ile iletişime geçin.');
+          return;
+        }
+        
+        // Başarılı güncelleme logu
+        const oldPermissions = oldPersonnel?.permissions || [];
+        const addedPermissions = permissions.filter(p => !oldPermissions.includes(p));
+        const removedPermissions = oldPermissions.filter(p => !permissions.includes(p));
+        
+        await addActivityLog({
+          userId: currentUser?.id,
+          username: currentUser?.username,
+          userEmail: currentUser?.email,
+          personnelId: editingId,
+          personnelName: formData.name,
+          action: `Personel güncellendi: ${formData.name}`,
+          module: 'PersonnelManagement',
+          details: JSON.stringify({
+            addedPermissions: addedPermissions.length > 0 ? addedPermissions : undefined,
+            removedPermissions: removedPermissions.length > 0 ? removedPermissions : undefined,
+            finalPermissions: permissions
+          }),
+          companyId: currentCompany?.companyId
+        });
+        
         alert('Personel başarıyla güncellendi!');
       } else {
-        await addPersonnel(personnelData);
+        // Yeni ekleme
+        const newPersonnelId = await addPersonnel(personnelData);
+        
+        // Activity log ekle
+        await addActivityLog({
+          userId: currentUser?.id,
+          username: currentUser?.username,
+          userEmail: currentUser?.email,
+          personnelId: newPersonnelId,
+          personnelName: formData.name,
+          action: `Yeni personel eklendi: ${formData.name}`,
+          module: 'PersonnelManagement',
+          details: JSON.stringify({
+            department: formData.department,
+            permissions: permissions
+          }),
+          companyId: currentCompany?.companyId
+        });
+        
         alert('Personel başarıyla eklendi!');
       }
       
@@ -142,14 +234,34 @@ export default function PersonnelManagement() {
       });
       loadPersonnel();
     } catch (error: any) {
-      const currentUser = localStorage.getItem('currentUser');
-      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      const currentUser = getCurrentUser();
+      const currentCompany = getCurrentCompany();
+      
+      console.error('Personel kaydedilirken hata:', error);
+      
       await addErrorLog(
         `Personel kaydedilirken hata: ${error.message || error}`,
         'PersonnelManagement',
-        userInfo?.id,
-        userInfo?.username
+        currentUser?.id,
+        currentUser?.username
       );
+      
+      // Activity log ekle
+      await addActivityLog({
+        userId: currentUser?.id,
+        username: currentUser?.username,
+        userEmail: currentUser?.email,
+        personnelId: editingId || undefined,
+        personnelName: formData.name,
+        action: `Personel kaydetme hatası: ${formData.name}`,
+        module: 'PersonnelManagement',
+        details: JSON.stringify({
+          error: error.message || String(error),
+          formData: { ...formData, permissions }
+        }),
+        companyId: currentCompany?.companyId
+      });
+      
       alert('Hata: ' + (error.message || 'Personel kaydedilirken bir hata oluştu'));
     }
   };
@@ -173,10 +285,63 @@ export default function PersonnelManagement() {
     }
 
     try {
+      const currentUser = getCurrentUser();
+      const currentCompany = getCurrentCompany();
+      const personnelToDelete = personnel.find(p => p.id === id);
+      
       await deletePersonnel(id);
+      
+      // Activity log ekle
+      if (personnelToDelete) {
+        await addActivityLog({
+          userId: currentUser?.id,
+          username: currentUser?.username,
+          userEmail: currentUser?.email,
+          personnelId: id,
+          personnelName: personnelToDelete.name,
+          action: `Personel silindi: ${personnelToDelete.name}`,
+          module: 'PersonnelManagement',
+          details: JSON.stringify({
+            department: personnelToDelete.department,
+            email: personnelToDelete.email
+          }),
+          companyId: currentCompany?.companyId
+        });
+      }
+      
       alert('Personel başarıyla silindi!');
       loadPersonnel();
     } catch (error: any) {
+      const currentUser = getCurrentUser();
+      const currentCompany = getCurrentCompany();
+      
+      console.error('Personel silinirken hata:', error);
+      
+      await addErrorLog(
+        `Personel silinirken hata: ${error.message || error}`,
+        'PersonnelManagement',
+        currentUser?.id,
+        currentUser?.username
+      );
+      
+      // Activity log ekle
+      const personnelToDelete = personnel.find(p => p.id === id);
+      if (personnelToDelete) {
+        await addActivityLog({
+          userId: currentUser?.id,
+          username: currentUser?.username,
+          userEmail: currentUser?.email,
+          personnelId: id,
+          personnelName: personnelToDelete.name,
+          action: `Personel silme hatası: ${personnelToDelete.name}`,
+          module: 'PersonnelManagement',
+          details: JSON.stringify({
+            error: error.message || String(error)
+          }),
+          companyId: currentCompany?.companyId
+        });
+      }
+      
       alert('Hata: ' + (error.message || 'Personel silinirken bir hata oluştu'));
     }
   };

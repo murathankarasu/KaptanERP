@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import StockEntry from './pages/StockEntry';
 import StockOutput from './pages/StockOutput';
 import StockStatus from './pages/StockStatus';
+import StockStatusDetail from './pages/StockStatusDetail';
 import ZimmetSignature from './pages/ZimmetSignature';
 import PersonnelManagement from './pages/PersonnelManagement';
 import OrderManagement from './pages/OrderManagement';
@@ -40,6 +41,7 @@ import Signup from './pages/Signup';
 import InviteAdmin from './pages/InviteAdmin';
 import About from './pages/About';
 import AIAssistantPage from './pages/AIAssistant';
+import BarcodeScanner from './pages/BarcodeScanner';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -131,6 +133,10 @@ function App() {
         <Route 
           path="/stock-status" 
           element={isAuthenticated() ? <StockStatus /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/stock-status-detail" 
+          element={isAuthenticated() ? <StockStatusDetail /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/zimmet-signature/:outputId" 
@@ -247,6 +253,10 @@ function App() {
         <Route 
           path="/admin-panel" 
           element={<AdminPanel />} 
+        />
+        <Route 
+          path="/barcode-scanner" 
+          element={<BarcodeScanner />} 
         />
         <Route path="/" element={<Navigate to={isAuthenticated() ? "/dashboard" : "/login"} />} />
       </Routes>

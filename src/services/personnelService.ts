@@ -9,7 +9,8 @@ import {
   Timestamp,
   doc,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  deleteField
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { PermissionType } from '../types/permissions';
@@ -82,22 +83,50 @@ export const getPersonnel = async (filters?: {
   }
 };
 
-export const updatePersonnel = async (id: string, personnel: Partial<Personnel>): Promise<void> => {
+export const updatePersonnel = async (id: string, personnel: Partial<Personnel>): Promise<Personnel> => {
   try {
     const docRef = doc(db, collectionName, id);
-    const payload = {
+    const payload: any = {
       ...personnel,
       updatedAt: Timestamp.now()
     };
 
+    // Permissions özel işleme: boş array ise açıkça sil, undefined ise dokunma
+    if (personnel.permissions !== undefined) {
+      if (Array.isArray(personnel.permissions) && personnel.permissions.length === 0) {
+        // Boş array ise Firestore'dan sil
+        payload.permissions = deleteField();
+      } else if (Array.isArray(personnel.permissions) && personnel.permissions.length > 0) {
+        // Dolu array ise gönder
+        payload.permissions = personnel.permissions;
+      }
+    }
+
     // Firestore updateDoc undefined alanları kabul etmiyor, temizle
     Object.keys(payload).forEach((key) => {
-      if (payload[key as keyof typeof payload] === undefined) {
+      if (payload[key as keyof typeof payload] === undefined && payload[key] !== deleteField()) {
         delete payload[key as keyof typeof payload];
       }
     });
 
     await updateDoc(docRef, payload);
+
+    // Güncelleme sonrası veriyi tekrar oku ve döndür (doğrulama için)
+    const updatedDoc = await getDoc(docRef);
+    if (!updatedDoc.exists()) {
+      throw new Error('Personel güncellendikten sonra veri bulunamadı');
+    }
+    
+    const data = updatedDoc.data();
+    const updatedPersonnel: Personnel = {
+      id: updatedDoc.id,
+      ...data,
+      createdAt: data.createdAt?.toDate(),
+      updatedAt: data.updatedAt?.toDate(),
+      permissions: data.permissions || [] // Boş array olarak döndür
+    };
+    
+    return updatedPersonnel;
   } catch (error) {
     console.error('Personel güncellenirken hata:', error);
     throw error;

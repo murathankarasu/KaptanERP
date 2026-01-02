@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import { notoSansBold, notoSansRegular } from './pdfFonts';
 
-const registerPdfFonts = (doc: jsPDF) => {
+export const registerPdfFonts = (doc: jsPDF) => {
   doc.addFileToVFS('NotoSans-Regular.ttf', notoSansRegular);
   doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
   doc.addFileToVFS('NotoSans-Bold.ttf', notoSansBold);
@@ -45,8 +45,8 @@ export const generateInvoicePDF = (input: InvoicePdfInput) => {
   doc.setProperties({
     title: 'Fatura',
     subject: 'Fatura Belgesi',
-    author: 'Kaptan ERP',
-    creator: 'Kaptan ERP'
+    author: 'Kaptan Yönetim',
+    creator: 'Kaptan Yönetim'
   });
   
   const pageWidth = doc.internal.pageSize.getWidth();

@@ -15,6 +15,7 @@ export interface StockEntry {
   id?: string;
   arrivalDate: Date;
   sku?: string;
+  barcode?: string;
   materialName: string;
   category: string;
   variant?: string;
@@ -22,8 +23,8 @@ export interface StockEntry {
   baseUnit?: string;
   conversionFactor?: number;
   quantity: number;
-  unitPrice: number;
-  supplier: string;
+  unitPrice?: number;
+  supplier?: string;
   warehouse?: string;
   binCode?: string;
   serialLot?: string;
@@ -72,12 +73,23 @@ export interface StockStatus {
 // Firestore'a giderken undefined alanları ve boş objeleri temizle
 const cleanPayload = (obj: any): any => {
   if (!obj || typeof obj !== 'object') return obj;
+  // Date ve Firestore Timestamp gibi tipleri bozma
+  if (obj instanceof Date) return obj;
+  if (obj?.toDate && typeof obj.toDate === 'function') return obj; // Timestamp
   const copy: any = Array.isArray(obj) ? [...obj] : { ...obj };
   Object.keys(copy).forEach((key) => {
     const value = copy[key];
     if (value === undefined) {
       delete copy[key];
     } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value instanceof Date) {
+        copy[key] = value;
+        return;
+      }
+      if (value?.toDate && typeof value.toDate === 'function') {
+        copy[key] = value; // Timestamp vb.
+        return;
+      }
       copy[key] = cleanPayload(value);
       if (copy[key] && typeof copy[key] === 'object' && Object.keys(copy[key]).length === 0) {
         delete copy[key];
@@ -87,9 +99,133 @@ const cleanPayload = (obj: any): any => {
   return copy;
 };
 
+// Barkod kontrolü - aynı barkod daha önce girilmiş mi?
+export const checkBarcodeExists = async (barcode: string, companyId?: string): Promise<boolean> => {
+  if (!barcode) return false;
+  try {
+    let q = query(
+      collection(db, 'stockEntries'),
+      where('barcode', '==', barcode)
+    );
+    if (companyId) {
+      q = query(q, where('companyId', '==', companyId));
+    }
+    const querySnapshot = await getDocs(q);
+    return !querySnapshot.empty;
+  } catch (error) {
+    console.error('Barkod kontrolü hatası:', error);
+    return false;
+  }
+};
+
+// Firma bazlı tüm barkodları getir
+export const getAllBarcodesByCompany = async (companyId: string): Promise<string[]> => {
+  try {
+    const q = query(
+      collection(db, 'stockEntries'),
+      where('companyId', '==', companyId)
+    );
+    const querySnapshot = await getDocs(q);
+    const barcodes: string[] = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.barcode) {
+        barcodes.push(data.barcode);
+      }
+    });
+    return barcodes;
+  } catch (error) {
+    console.error('Barkodlar getirilirken hata:', error);
+    return [];
+  }
+};
+
+// Barkod ile stok girişi bul
+export const getStockEntryByBarcode = async (barcode: string, companyId?: string): Promise<StockEntry | null> => {
+  try {
+    let q = query(
+      collection(db, 'stockEntries'),
+      where('barcode', '==', barcode)
+    );
+    if (companyId) {
+      q = query(q, where('companyId', '==', companyId));
+    }
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return null;
+    }
+    const doc = querySnapshot.docs[0];
+    const data: any = doc.data();
+
+    // arrivalDate'i güvenli şekilde parse et
+    let arrivalDate: Date;
+    if (data.arrivalDate?.toDate && typeof data.arrivalDate.toDate === 'function') {
+      arrivalDate = data.arrivalDate.toDate();
+    } else if (data.arrivalDate instanceof Date) {
+      arrivalDate = data.arrivalDate;
+    } else if (data.arrivalDate) {
+      arrivalDate = new Date(data.arrivalDate);
+    } else {
+      arrivalDate = new Date();
+    }
+    if (isNaN(arrivalDate.getTime())) {
+      const createdAt = data.createdAt?.toDate?.() ?? data.createdAt;
+      const fallback = createdAt ? new Date(createdAt) : new Date();
+      arrivalDate = isNaN(fallback.getTime()) ? new Date() : fallback;
+    }
+
+    // expiryDate'i güvenli şekilde parse et
+    let expiryDate: Date | undefined;
+    if (data.expiryDate?.toDate && typeof data.expiryDate.toDate === 'function') {
+      expiryDate = data.expiryDate.toDate();
+    } else if (data.expiryDate instanceof Date) {
+      expiryDate = data.expiryDate;
+    } else if (data.expiryDate) {
+      expiryDate = new Date(data.expiryDate);
+    }
+    if (expiryDate && isNaN(expiryDate.getTime())) {
+      expiryDate = undefined;
+    }
+
+    return {
+      id: doc.id,
+      arrivalDate,
+      sku: data.sku,
+      barcode: data.barcode,
+      materialName: data.materialName,
+      category: data.category,
+      variant: data.variant,
+      unit: data.unit,
+      baseUnit: data.baseUnit,
+      conversionFactor: data.conversionFactor,
+      quantity: data.quantity,
+      unitPrice: data.unitPrice,
+      supplier: data.supplier,
+      warehouse: data.warehouse,
+      binCode: data.binCode,
+      serialLot: data.serialLot,
+      expiryDate,
+      note: data.note,
+      companyId: data.companyId,
+      createdAt: data.createdAt?.toDate?.() ?? data.createdAt
+    };
+  } catch (error) {
+    console.error('Barkod ile stok girişi bulunurken hata:', error);
+    return null;
+  }
+};
+
 // Stok Giriş Ekleme
 export const addStockEntry = async (entry: StockEntry): Promise<string> => {
   try {
+    // Barkod kontrolü
+    if (entry.barcode && entry.companyId) {
+      const exists = await checkBarcodeExists(entry.barcode, entry.companyId);
+      if (exists) {
+        throw new Error('Bu barkod daha önce girilmiş. Aynı barkod tekrar kullanılamaz.');
+      }
+    }
+    
     const payload = cleanPayload({
       ...entry,
       arrivalDate: Timestamp.fromDate(entry.arrivalDate),
@@ -136,10 +272,43 @@ export const getStockEntries = async (filters?: {
     
     querySnapshot.forEach((docSnap) => {
       const data: any = docSnap.data();
+      
+      // arrivalDate'i güvenli şekilde parse et
+      let arrivalDate: Date;
+      if (data.arrivalDate?.toDate && typeof data.arrivalDate.toDate === 'function') {
+        arrivalDate = data.arrivalDate.toDate();
+      } else if (data.arrivalDate instanceof Date) {
+        arrivalDate = data.arrivalDate;
+      } else if (data.arrivalDate) {
+        arrivalDate = new Date(data.arrivalDate);
+      } else {
+        arrivalDate = new Date(); // Fallback
+      }
+      // Geçersiz tarih fallback
+      if (isNaN(arrivalDate.getTime())) {
+        const createdAt = data.createdAt?.toDate?.() ?? data.createdAt;
+        const fallback = createdAt ? new Date(createdAt) : new Date();
+        arrivalDate = isNaN(fallback.getTime()) ? new Date() : fallback;
+      }
+      
+      // expiryDate'i güvenli şekilde parse et
+      let expiryDate: Date | undefined;
+      if (data.expiryDate?.toDate && typeof data.expiryDate.toDate === 'function') {
+        expiryDate = data.expiryDate.toDate();
+      } else if (data.expiryDate instanceof Date) {
+        expiryDate = data.expiryDate;
+      } else if (data.expiryDate) {
+        expiryDate = new Date(data.expiryDate);
+      }
+      if (expiryDate && isNaN(expiryDate.getTime())) {
+        expiryDate = undefined;
+      }
+      
       const entry: StockEntry = {
         id: docSnap.id,
-        arrivalDate: data.arrivalDate?.toDate?.() ?? data.arrivalDate,
+        arrivalDate,
         sku: data.sku,
+        barcode: data.barcode,
         materialName: data.materialName,
         category: data.category,
         variant: data.variant,
@@ -152,7 +321,7 @@ export const getStockEntries = async (filters?: {
         warehouse: data.warehouse,
         binCode: data.binCode,
         serialLot: data.serialLot,
-        expiryDate: data.expiryDate?.toDate ? data.expiryDate.toDate() : undefined,
+        expiryDate,
         note: data.note,
         companyId: data.companyId,
         createdAt: data.createdAt?.toDate?.() ?? data.createdAt
@@ -398,7 +567,10 @@ export const updateStockStatusOnEntry = async (
   unit: string,
   criticalLevel: number,
   companyId?: string,
-  warehouse?: string
+  warehouse?: string,
+  sku?: string,
+  variant?: string,
+  binCode?: string
 ): Promise<void> => {
   try {
     const stockStatus = await getStockStatusByMaterial(materialName, companyId, warehouse);
@@ -423,7 +595,11 @@ export const updateStockStatusOnEntry = async (
         totalEntry: newTotalEntry,
         currentStock: newCurrentStock,
         criticalLevel: finalCriticalLevel,
-        status
+        status,
+        // Stok girişte girilen detayları sakla (mevcut varsa ezmemek için sadece doluysa yaz)
+        ...(sku ? { sku } : {}),
+        ...(variant ? { variant } : {}),
+        ...(binCode ? { binCode } : {})
       });
     } else {
       // Yeni stok durumu oluştur
@@ -438,8 +614,11 @@ export const updateStockStatusOnEntry = async (
       }
       
       const newStatus: StockStatus = {
+        sku,
         materialName,
+        variant,
         warehouse,
+        binCode,
         totalEntry: quantity,
         totalOutput: 0,
         currentStock: quantity,

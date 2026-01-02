@@ -519,9 +519,10 @@ export default function ShipmentManagement() {
     return statusMap[status] || status;
   };
 
+  // Sadece stokta olan ürünleri göster (depo seçilmişse o depodaki, seçilmemişse depo belirtilmemiş olanlar)
   const availableMaterials = formData.warehouse
     ? stockStatus.filter(s => s.currentStock > 0 && s.warehouse === formData.warehouse)
-    : stockStatus.filter(s => s.currentStock > 0 && !s.warehouse);
+    : stockStatus.filter(s => s.currentStock > 0 && (!s.warehouse || s.warehouse === ''));
 
   const selectedMaterial = stockStatus.find(s => 
     s.materialName === newItem.materialName && 

@@ -13,7 +13,7 @@ export default function About() {
         <section style={{ marginBottom: '48px' }}>
           <p style={{ fontSize: '20px', lineHeight: '1.6', color: '#333' }}>
             Kaptan, karmaşık işletme süreçlerini basitleştirmek için tasarlanmış yeni nesil bir İşletme Yönetim Sistemi (BMS)'dir. 
-            Geleneksel, hantal ERP sistemlerinden uzaklaşarak, Kaptan tedarik zincirleri, müşteri ilişkileri, finans, 
+            Geleneksel, hantal Yönetim sistemlerinden uzaklaşarak, Kaptan tedarik zincirleri, müşteri ilişkileri, finans, 
             üretim ve insan kaynakları yönetimi için modüler, yapay zeka odaklı bir yaklaşım sunar.
           </p>
         </section>

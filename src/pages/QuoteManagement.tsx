@@ -5,6 +5,7 @@ import { formatDate } from '../utils/formatDate';
 import { addOrder, Order } from '../services/orderService';
 import { getCustomers, Customer } from '../services/customerService';
 import { getPriceRules, PriceRule, selectPriceRule } from '../services/priceService';
+import { getAllStockStatus } from '../services/stockService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { addErrorLog } from '../services/userService';
 import { Plus, Save, X, Edit, Send, ClipboardList, CheckSquare, Trash2, ShoppingCart } from 'lucide-react';
@@ -15,6 +16,7 @@ export default function QuoteManagement() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [priceRules, setPriceRules] = useState<PriceRule[]>([]);
+  const [stockStatus, setStockStatus] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -36,14 +38,16 @@ export default function QuoteManagement() {
   const loadAll = async () => {
     try {
       const company = getCurrentCompany();
-      const [qs, cs, ps] = await Promise.all([
+      const [qs, cs, ps, stock] = await Promise.all([
         getQuotes(company?.companyId),
         getCustomers(company?.companyId),
-        getPriceRules(company?.companyId)
+        getPriceRules(company?.companyId),
+        getAllStockStatus(company?.companyId)
       ]);
       setQuotes(qs);
       setCustomers(cs);
       setPriceRules(ps);
+      setStockStatus(stock);
     } catch (error: any) {
       const userInfo = JSON.parse(localStorage.getItem('currentUser') || 'null');
       await addErrorLog(`Teklifler yüklenirken hata: ${error.message || error}`, 'QuoteManagement', userInfo?.id, userInfo?.username);
@@ -240,7 +244,33 @@ export default function QuoteManagement() {
               <div style={{ marginTop: '14px', padding: '12px', border: '1px dashed #999' }}>
                 <h4 style={{ marginBottom: '10px' }}>Kalem Ekle</h4>
                 <div className="grid-4" style={{ gap: '8px' }}>
-                  <input className="excel-form-input" placeholder="Malzeme" value={newItem.materialName} onChange={(e) => setNewItem({ ...newItem, materialName: e.target.value })} />
+                  <select
+                    className="excel-form-select"
+                    value={newItem.materialName}
+                    onChange={(e) => {
+                      const material = stockStatus.find(s => s.materialName === e.target.value);
+                      setNewItem({
+                        ...newItem,
+                        materialName: e.target.value,
+                        unit: material?.unit || ''
+                      });
+                    }}
+                    required
+                  >
+                    <option value="">Stokta Olan Malzemelerden Seçiniz</option>
+                    {stockStatus
+                      .filter(s => s.currentStock > 0)
+                      .map(m => (
+                        <option key={m.materialName} value={m.materialName}>
+                          {m.materialName} {m.warehouse && `(${m.warehouse})`} (Mevcut: {m.currentStock} {m.unit})
+                        </option>
+                      ))}
+                  </select>
+                  {stockStatus.filter(s => s.currentStock > 0).length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px', gridColumn: '1 / -1' }}>
+                      Stokta ürün bulunmamaktadır.
+                    </div>
+                  )}
                   <input className="excel-form-input" placeholder="Miktar" value={newItem.quantity} onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })} />
                   <input className="excel-form-input" placeholder="Birim" value={newItem.unit} onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })} />
                   <input className="excel-form-input" placeholder="Birim Fiyat (boş: kural)" value={newItem.unitPrice} onChange={(e) => setNewItem({ ...newItem, unitPrice: e.target.value })} />

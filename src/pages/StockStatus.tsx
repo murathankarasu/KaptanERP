@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import { getAllStockStatus, StockStatus } from '../services/stockService';
 import { getWarehouses } from '../services/warehouseService';
@@ -6,6 +6,8 @@ import { addErrorLog } from '../services/userService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { exportStockStatusToExcel } from '../utils/excelExport';
 import { Download, AlertCircle } from 'lucide-react';
+import { collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function StockStatusPage() {
   const [stockStatus, setStockStatus] = useState<StockStatus[]>([]);
@@ -16,6 +18,7 @@ export default function StockStatusPage() {
   const [filterSku, setFilterSku] = useState('');
   const [filterVariant, setFilterVariant] = useState('');
   const [filterBin, setFilterBin] = useState('');
+  const didBackfillRef = useRef(false);
 
   useEffect(() => {
     loadStockStatus();
@@ -35,6 +38,64 @@ export default function StockStatusPage() {
         filterBin || undefined
       );
       setStockStatus(data);
+
+      // Backfill: eski stockStatus kayıtlarında SKU/Varyant boş olabilir.
+      // Stok girişlerinden (stockEntries) son bilinen SKU/Varyant'ı çekip stockStatus dokümanına yazarız.
+      if (!didBackfillRef.current && currentCompany?.companyId) {
+        const needs = data.filter((s) => !s.sku || !s.variant);
+        if (needs.length > 0) {
+          didBackfillRef.current = true;
+          try {
+            // İlgili şirketin tüm stok girişlerini çek
+            const qRef = query(collection(db, 'stockEntries'), where('companyId', '==', currentCompany.companyId));
+            const snap = await getDocs(qRef);
+            const entries: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+            // materialName|warehouse -> en son girişten sku/variant
+            const latestByKey = new Map<string, { sku?: string; variant?: string; warehouse?: string; materialName: string }>();
+            const toMillis = (v: any) => {
+              try {
+                if (v?.toDate && typeof v.toDate === 'function') return v.toDate().getTime();
+                if (v instanceof Date) return v.getTime();
+                const d = new Date(v);
+                return d.getTime();
+              } catch {
+                return 0;
+              }
+            };
+
+            entries.forEach((e) => {
+              const key = `${e.materialName || ''}||${e.warehouse || ''}`;
+              const t = toMillis(e.arrivalDate);
+              const prev: any = (latestByKey as any).get(key);
+              const prevT = prev?._t || 0;
+              if (!prev || t >= prevT) {
+                (latestByKey as any).set(key, { sku: e.sku, variant: e.variant, materialName: e.materialName, warehouse: e.warehouse, _t: t });
+              }
+            });
+
+            // Eksik alanları güncelle
+            const updates = needs.map(async (s) => {
+              const key = `${s.materialName || ''}||${s.warehouse || ''}`;
+              const latest: any = latestByKey.get(key);
+              if (!latest) return;
+              const payload: any = {};
+              if (!s.sku && latest.sku) payload.sku = latest.sku;
+              if (!s.variant && latest.variant) payload.variant = latest.variant;
+              if (Object.keys(payload).length === 0) return;
+              await updateDoc(doc(db, 'stockStatus', s.id!), payload);
+              // UI'ı da güncelle
+              setStockStatus((prev) =>
+                prev.map((x) => (x.id === s.id ? ({ ...x, ...payload } as any) : x))
+              );
+            });
+
+            await Promise.all(updates);
+          } catch (e) {
+            console.error('StockStatus backfill hatası:', e);
+          }
+        }
+      }
     } catch (error: any) {
       console.error('Stok durumu yüklenirken hata:', error);
       const currentUser = localStorage.getItem('currentUser');
@@ -278,14 +339,13 @@ export default function StockStatusPage() {
                   <th>SKU</th>
                   <th>Malzeme Adı</th>
                   <th>Varyant</th>
-                  <th>Depo</th>
-                  <th>Raf/Göz</th>
                   <th>Toplam Giriş</th>
                   <th>Toplam Çıkış</th>
                   <th>Mevcut Stok</th>
                   <th>Kritik Seviye</th>
                   <th>Durum</th>
                   <th>Birim</th>
+                  <th>Detay</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,8 +354,6 @@ export default function StockStatusPage() {
                     <td style={{ fontWeight: '500' }}>{status.sku || '-'}</td>
                     <td style={{ fontWeight: '500' }}>{status.materialName}</td>
                     <td>{status.variant || <span style={{ color: '#999' }}>-</span>}</td>
-                    <td>{status.warehouse || <span style={{ color: '#999' }}>-</span>}</td>
-                    <td>{status.binCode || <span style={{ color: '#999' }}>-</span>}</td>
                     <td>{status.totalEntry}</td>
                     <td>{status.totalOutput}</td>
                     <td style={{ 
@@ -307,6 +365,18 @@ export default function StockStatusPage() {
                     <td>{status.criticalLevel}</td>
                     <td>{getStatusBadge(status.status)}</td>
                     <td>{status.unit}</td>
+                    <td>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 10px', fontSize: '12px' }}
+                        onClick={() => {
+                          const url = `/stock-status-detail?sku=${encodeURIComponent(status.sku || '')}&materialName=${encodeURIComponent(status.materialName)}`;
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        Ürün Detayı
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

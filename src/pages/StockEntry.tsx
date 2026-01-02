@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { addStockEntry, getStockEntries, StockEntry as StockEntryType, updateStockStatusOnEntry } from '../services/stockService';
+import { addStockEntry, getStockEntries, StockEntry as StockEntryType, updateStockStatusOnEntry, checkBarcodeExists, getAllBarcodesByCompany } from '../services/stockService';
+import { generateBarcode } from '../utils/barcodeGenerator';
 import { getWarehouses } from '../services/warehouseService';
+import { getProducts, Product } from '../services/productService';
 import { addErrorLog } from '../services/userService';
 import { addActivityLog } from '../services/activityLogService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
@@ -10,7 +12,7 @@ import { getCurrentUser } from '../utils/getCurrentUser';
 import { exportStockEntriesToExcel } from '../utils/excelExport';
 import { importStockEntriesFromExcel } from '../utils/excelImport';
 import AIFormatFixModal from '../components/AIFormatFixModal';
-import { Download, Plus, X, Upload } from 'lucide-react';
+import { Download, Plus, X, Upload, QrCode } from 'lucide-react';
 import { formatDate } from '../utils/formatDate';
 
 export default function StockEntry() {
@@ -18,10 +20,13 @@ export default function StockEntry() {
   const [entries, setEntries] = useState<StockEntryType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [needsFormatFix, setNeedsFormatFix] = useState(false);
   const [aiFixedData, setAiFixedData] = useState<any[]>([]);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedBarcode, setSelectedBarcode] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState({
     materialName: '',
@@ -32,9 +37,13 @@ export default function StockEntry() {
   });
 
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [autoGenerateBarcode, setAutoGenerateBarcode] = useState(true);
   const [formData, setFormData] = useState({
     arrivalDate: new Date().toISOString().split('T')[0],
     sku: '',
+    barcode: '',
     materialName: '',
     category: '',
     variant: '',
@@ -55,26 +64,38 @@ export default function StockEntry() {
   useEffect(() => {
     loadEntries();
     loadWarehouses();
+    loadProducts();
   }, [filters]);
 
   // Stok kartından gelen ön-dolum (query parametreleri)
   useEffect(() => {
-    if (!location.search) return;
+    if (!location.search || products.length === 0) return;
     const params = new URLSearchParams(location.search);
-    const hasPrefill = ['sku', 'materialName', 'category', 'unit', 'baseUnit', 'variant'].some(k => params.get(k));
-    if (!hasPrefill) return;
-
-    setFormData((prev) => ({
-      ...prev,
-      sku: params.get('sku') || prev.sku,
-      materialName: params.get('materialName') || prev.materialName,
-      category: params.get('category') || prev.category,
-      unit: params.get('unit') || prev.unit,
-      baseUnit: params.get('baseUnit') || prev.baseUnit,
-      variant: params.get('variant') || prev.variant
-    }));
-    setShowForm(true);
-  }, [location.search]);
+    const sku = params.get('sku');
+    const materialName = params.get('materialName');
+    
+    if (sku || materialName) {
+      // SKU veya ürün adına göre ürün bul
+      const product = products.find(p => 
+        (sku && p.sku === sku) || (materialName && p.name === materialName)
+      );
+      
+      if (product) {
+        handleProductSelect(product.id || '');
+        setFormData((prev) => ({
+          ...prev,
+          unit: params.get('unit') || prev.unit || product.baseUnit,
+          variant: params.get('variant') || prev.variant
+        }));
+        setShowForm(true);
+        // Form açıldığında tarihi bugünün tarihi olarak ayarla
+        setFormData(prev => ({
+          ...prev,
+          arrivalDate: new Date().toISOString().split('T')[0]
+        }));
+      }
+    }
+  }, [location.search, products]);
 
   const loadWarehouses = async () => {
     try {
@@ -84,6 +105,48 @@ export default function StockEntry() {
     } catch (error) {
       console.error('Depolar yüklenirken hata:', error);
     }
+  };
+
+  const loadProducts = async () => {
+    try {
+      const currentCompany = getCurrentCompany();
+      const data = await getProducts(currentCompany?.companyId);
+      setProducts(data);
+    } catch (error) {
+      console.error('Ürün kartları yüklenirken hata:', error);
+    }
+  };
+
+  const handleProductSelect = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) {
+      setSelectedProductId('');
+      setFormData(prev => ({
+        ...prev,
+        sku: '',
+        materialName: '',
+        category: '',
+        baseUnit: '',
+        variant: '',
+        unit: ''
+      }));
+      return;
+    }
+
+    setSelectedProductId(productId);
+    const variantText = product.variant 
+      ? [product.variant.color, product.variant.size].filter(Boolean).join(' ')
+      : '';
+
+    setFormData(prev => ({
+      ...prev,
+      sku: product.sku || '',
+      materialName: product.name,
+      category: product.category || '',
+      baseUnit: product.baseUnit,
+      unit: product.baseUnit, // Varsayılan olarak temel birim
+      variant: variantText
+    }));
   };
 
   const loadEntries = async () => {
@@ -120,10 +183,23 @@ export default function StockEntry() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Çift submit'i engelle
+    if (submitting) return;
+
+    // Date input (YYYY-MM-DD) için local Date üret (timezone kayması olmasın)
+    const parseLocalDate = (s: string) => {
+      const parts = String(s || '').split('-').map((x) => parseInt(x, 10));
+      if (parts.length === 3 && !parts.some((n) => Number.isNaN(n))) {
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+      }
+      const d = new Date(s);
+      return d;
+    };
     
     // Sayısal alan validasyonu
     const quantity = parseFloat(formData.quantity);
-    const unitPrice = parseFloat(formData.unitPrice);
+    const unitPrice = formData.unitPrice ? parseFloat(formData.unitPrice) : 0;
     const criticalLevel = formData.criticalLevel ? parseFloat(formData.criticalLevel) : 0;
     
     if (isNaN(quantity) || quantity <= 0) {
@@ -131,8 +207,13 @@ export default function StockEntry() {
       return;
     }
     
-    if (isNaN(unitPrice) || unitPrice < 0) {
+    if (formData.unitPrice && (isNaN(unitPrice) || unitPrice < 0)) {
       alert('Birim Fiyat geçerli bir sayı olmalıdır');
+      return;
+    }
+    
+    if (!selectedProductId || !formData.materialName) {
+      alert('Lütfen ürün kartından bir ürün seçin');
       return;
     }
     
@@ -146,11 +227,35 @@ export default function StockEntry() {
       return;
     }
     
+    // Barkod işlemleri
+    const currentCompany = getCurrentCompany();
+    let finalBarcode = formData.barcode;
+    
+    // Otomatik barkod oluştur
+    if (autoGenerateBarcode && !finalBarcode && currentCompany?.companyId) {
+      try {
+        const existingBarcodes = await getAllBarcodesByCompany(currentCompany.companyId);
+        finalBarcode = generateBarcode(currentCompany.companyId, existingBarcodes);
+      } catch (error) {
+        console.error('Barkod oluşturulurken hata:', error);
+      }
+    }
+    
+    // Barkod kontrolü
+    if (finalBarcode && currentCompany?.companyId) {
+      const barcodeExists = await checkBarcodeExists(finalBarcode, currentCompany.companyId);
+      if (barcodeExists) {
+        alert('Bu barkod daha önce girilmiş. Aynı barkod tekrar kullanılamaz.');
+        return;
+      }
+    }
+    
     try {
-      const currentCompany = getCurrentCompany();
+      setSubmitting(true);
       const entry: StockEntryType = {
-        arrivalDate: new Date(formData.arrivalDate),
+        arrivalDate: parseLocalDate(formData.arrivalDate),
         sku: formData.sku || undefined,
+        barcode: finalBarcode || undefined,
         materialName: formData.materialName,
         category: formData.category,
         variant: formData.variant || undefined,
@@ -158,12 +263,12 @@ export default function StockEntry() {
         baseUnit: formData.baseUnit || undefined,
         conversionFactor: formData.conversionFactor ? parseFloat(formData.conversionFactor) : undefined,
         quantity: quantity,
-        unitPrice: unitPrice,
-        supplier: formData.supplier,
+        unitPrice: unitPrice > 0 ? unitPrice : undefined,
+        supplier: formData.supplier || undefined,
         warehouse: formData.warehouse || undefined,
         binCode: formData.binCode || undefined,
         serialLot: formData.serialLot || undefined,
-        expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : undefined,
+        expiryDate: formData.expiryDate ? parseLocalDate(formData.expiryDate) : undefined,
         note: formData.note,
         companyId: currentCompany?.companyId
       };
@@ -177,7 +282,10 @@ export default function StockEntry() {
         formData.unit,
         criticalLevel,
         currentCompany?.companyId,
-        formData.warehouse || undefined
+        formData.warehouse || undefined,
+        formData.sku || undefined,
+        formData.variant || undefined,
+        formData.binCode || undefined
       );
 
       // Aktivite logu kaydet
@@ -204,9 +312,11 @@ export default function StockEntry() {
 
       alert('Stok girişi başarıyla eklendi!');
       setShowForm(false);
+      setSelectedProductId('');
       setFormData({
         arrivalDate: new Date().toISOString().split('T')[0],
         sku: '',
+        barcode: '',
         materialName: '',
         category: '',
         variant: '',
@@ -234,6 +344,8 @@ export default function StockEntry() {
         userInfo?.username
       );
       alert('Hata: ' + (error.message || 'Stok girişi eklenirken bir hata oluştu'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -309,7 +421,10 @@ export default function StockEntry() {
             entry.unit,
             0, // Kritik seviye import'ta belirtilmemişse 0
             currentCompany?.companyId,
-            entry.warehouse || undefined
+            entry.warehouse || undefined,
+            entry.sku || undefined,
+            entry.variant || undefined,
+            entry.binCode || undefined
           );
           
           successCount++;
@@ -419,8 +534,33 @@ export default function StockEntry() {
                     className="excel-form-input"
                     value={formData.arrivalDate}
                     onChange={(e) => setFormData({ ...formData, arrivalDate: e.target.value })}
+                    max={new Date().toISOString().split('T')[0]}
                     required
                   />
+                </div>
+                <div className="excel-form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="excel-form-label">Ürün Kartı *</label>
+                  <select
+                    className="excel-form-select"
+                    value={selectedProductId}
+                    onChange={(e) => handleProductSelect(e.target.value)}
+                    required
+                    style={{ fontSize: '14px' }}
+                  >
+                    <option value="">Ürün kartından seçiniz</option>
+                    {products.map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.sku ? `[${product.sku}] ` : ''}{product.name}
+                        {product.category ? ` - ${product.category}` : ''}
+                        {product.variant ? ` (${[product.variant.color, product.variant.size].filter(Boolean).join(' ')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {products.length === 0 && (
+                    <div style={{ fontSize: '12px', color: '#dc3545', marginTop: '4px' }}>
+                      Henüz ürün kartı yok. Önce <a href="/product-management" style={{ color: '#007bff', textDecoration: 'underline' }}>Ürün Kartları</a> sayfasından ürün ekleyin.
+                    </div>
+                  )}
                 </div>
                 <div className="excel-form-group">
                   <label className="excel-form-label">SKU</label>
@@ -428,28 +568,58 @@ export default function StockEntry() {
                     type="text"
                     className="excel-form-input"
                     value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    placeholder="Ürün kartı SKU (opsiyonel)"
+                    readOnly
+                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                    placeholder="Ürün kartından otomatik"
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Malzeme Adı *</label>
+                  <label className="excel-form-label">Barkod</label>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      className="excel-form-input"
+                      value={formData.barcode}
+                      onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                      disabled={autoGenerateBarcode}
+                      placeholder={autoGenerateBarcode ? 'Otomatik oluşturulacak' : 'Barkod girin (tekrar kontrolü yapılır)'}
+                      style={{ flex: 1 }}
+                    />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoGenerateBarcode}
+                        onChange={(e) => {
+                          setAutoGenerateBarcode(e.target.checked);
+                          if (e.target.checked) {
+                            setFormData({ ...formData, barcode: '' });
+                          }
+                        }}
+                      />
+                      Otomatik Oluştur
+                    </label>
+                  </div>
+                </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Malzeme Adı</label>
                   <input
                     type="text"
                     className="excel-form-input"
                     value={formData.materialName}
-                    onChange={(e) => setFormData({ ...formData, materialName: e.target.value })}
-                    required
+                    readOnly
+                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                    placeholder="Ürün kartından otomatik"
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Kategori *</label>
+                  <label className="excel-form-label">Kategori</label>
                   <input
                     type="text"
                     className="excel-form-input"
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    required
+                    readOnly
+                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                    placeholder="Ürün kartından otomatik"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -459,7 +629,7 @@ export default function StockEntry() {
                     className="excel-form-input"
                     value={formData.variant}
                     onChange={(e) => setFormData({ ...formData, variant: e.target.value })}
-                    placeholder="Örn: Kırmızı-M"
+                    placeholder="Ürün kartından otomatik (değiştirilebilir)"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -471,12 +641,23 @@ export default function StockEntry() {
                     required
                   >
                     <option value="">Seçiniz</option>
+                    {formData.baseUnit && (
+                      <option value={formData.baseUnit}>{formData.baseUnit} (Temel Birim)</option>
+                    )}
+                    {selectedProductId && (() => {
+                      const product = products.find(p => p.id === selectedProductId);
+                      return product?.units?.map(conv => conv.toUnit).filter(u => u !== formData.baseUnit) || [];
+                    })().map(unit => (
+                      <option key={unit} value={unit}>{unit}</option>
+                    ))}
                     <option value="Adet">Adet</option>
                     <option value="Kg">Kg</option>
                     <option value="Lt">Lt</option>
                     <option value="m²">m²</option>
                     <option value="m³">m³</option>
                     <option value="Paket">Paket</option>
+                    <option value="Koli">Koli</option>
+                    <option value="Kutu">Kutu</option>
                   </select>
                 </div>
                 <div className="excel-form-group">
@@ -485,8 +666,9 @@ export default function StockEntry() {
                     type="text"
                     className="excel-form-input"
                     value={formData.baseUnit}
-                    onChange={(e) => setFormData({ ...formData, baseUnit: e.target.value })}
-                    placeholder="Ürün kartındaki temel birim"
+                    readOnly
+                    style={{ background: '#f5f5f5', cursor: 'not-allowed' }}
+                    placeholder="Ürün kartından otomatik"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -512,24 +694,24 @@ export default function StockEntry() {
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Birim Fiyat *</label>
+                  <label className="excel-form-label">Birim Fiyat</label>
                   <input
                     type="number"
                     step="0.01"
                     className="excel-form-input"
                     value={formData.unitPrice}
                     onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
-                    required
+                    placeholder="Birim fiyat (opsiyonel)"
                   />
                 </div>
                 <div className="excel-form-group">
-                  <label className="excel-form-label">Tedarikçi *</label>
+                  <label className="excel-form-label">Tedarikçi</label>
                   <input
                     type="text"
                     className="excel-form-input"
                     value={formData.supplier}
                     onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-                    required
+                    placeholder="Tedarikçi (opsiyonel)"
                   />
                 </div>
                 <div className="excel-form-group">
@@ -617,7 +799,9 @@ export default function StockEntry() {
                 />
               </div>
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button type="submit" className="btn btn-primary">Kaydet</button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>İptal</button>
               </div>
             </form>
@@ -706,13 +890,19 @@ export default function StockEntry() {
               <thead>
                 <tr>
                   <th>Geliş Tarihi</th>
+                  <th>SKU</th>
+                  <th>Barkod</th>
                   <th>Malzeme Adı</th>
                   <th>Kategori</th>
+                  <th>Varyant</th>
                   <th>Birim</th>
                   <th>Gelen Miktar</th>
                   <th>Birim Fiyat</th>
                   <th>Tedarikçi</th>
                   <th>Depo</th>
+                  <th>Raf/Göz</th>
+                  <th>Seri/Lot</th>
+                  <th>SKT</th>
                   <th>Not</th>
                 </tr>
               </thead>
@@ -722,13 +912,49 @@ export default function StockEntry() {
                     <td>
                       {formatDate(entry.arrivalDate)}
                     </td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                      {entry.sku || '-'}
+                    </td>
+                    <td>
+                      {entry.barcode ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: '13px' }}>{entry.barcode}</span>
+                          <button
+                            onClick={() => {
+                              setSelectedBarcode(entry.barcode!);
+                              setShowQRModal(true);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: '1px solid #000',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px'
+                            }}
+                            title="QR Kod Göster"
+                          >
+                            <QrCode size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td>{entry.materialName}</td>
                     <td>{entry.category}</td>
+                    <td>{entry.variant || '-'}</td>
                     <td>{entry.unit}</td>
                     <td>{entry.quantity}</td>
-                    <td>{entry.unitPrice.toFixed(2)} ₺</td>
-                    <td>{entry.supplier}</td>
+                    <td>{entry.unitPrice ? entry.unitPrice.toFixed(2) + ' ₺' : '-'}</td>
+                    <td>{entry.supplier || '-'}</td>
                     <td>{entry.warehouse || '-'}</td>
+                    <td>{entry.binCode || '-'}</td>
+                    <td>{entry.serialLot || '-'}</td>
+                    <td>{entry.expiryDate ? formatDate(entry.expiryDate) : '-'}</td>
                     <td>{entry.note || '-'}</td>
                   </tr>
                 ))}
@@ -775,7 +1001,17 @@ export default function StockEntry() {
                   
                   if (entry.materialName && entry.category && entry.unit) {
                     await addStockEntry(entry);
-                    await updateStockStatusOnEntry(entry.materialName, entry.quantity, entry.unit, 0, currentCompany?.companyId, entry.warehouse || undefined);
+                    await updateStockStatusOnEntry(
+                      entry.materialName,
+                      entry.quantity,
+                      entry.unit,
+                      0,
+                      currentCompany?.companyId,
+                      entry.warehouse || undefined,
+                      entry.sku || undefined,
+                      entry.variant || undefined,
+                      entry.binCode || undefined
+                    );
                     successCount++;
                   } else {
                     errorCount++;
@@ -800,6 +1036,104 @@ export default function StockEntry() {
           aiFixedData={aiFixedData}
           originalErrors={[]}
         />
+
+        {/* QR Kod Modal */}
+        {showQRModal && selectedBarcode && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }} onClick={() => setShowQRModal(false)}>
+            <div style={{
+              background: '#fff',
+              padding: '30px',
+              borderRadius: '12px',
+              maxWidth: '400px',
+              width: '90%',
+              border: '2px solid #000',
+              textAlign: 'center'
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Barkod QR Kodu</h3>
+                <button
+                  onClick={() => setShowQRModal(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div style={{
+                padding: '20px',
+                background: '#fff',
+                border: '2px solid #000',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${window.location.origin}/barcode-scanner?companyCode=${encodeURIComponent(getCurrentCompany()?.companyCode || '')}&barcode=${selectedBarcode}`)}`}
+                  alt="QR Code"
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                />
+              </div>
+              
+              <div style={{ marginBottom: '15px' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Barkod Numarası</div>
+                <div style={{ 
+                  fontSize: '18px', 
+                  fontWeight: 600, 
+                  fontFamily: 'monospace',
+                  padding: '8px',
+                  background: '#f5f5f5',
+                  borderRadius: '4px'
+                }}>
+                  {selectedBarcode}
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>
+                Bu QR kodu telefonunuzla okutarak ürün bilgilerine erişebilirsiniz.
+              </div>
+              
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    const companyCode = getCurrentCompany()?.companyCode || '';
+                    const url = `${window.location.origin}/barcode-scanner?companyCode=${encodeURIComponent(companyCode)}&barcode=${selectedBarcode}`;
+                    navigator.clipboard.writeText(url);
+                    alert('Link kopyalandı!');
+                  }}
+                >
+                  Linki Kopyala
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowQRModal(false)}
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
