@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { Brain, MessageCircle, BarChart3, ListChecks, Sparkles, FileText, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
+import { Brain, MessageCircle, BarChart3, ListChecks, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
 
-type ToolId = 'chat' | 'stock-analysis' | 'daily-report' | 'anomaly-detection' | 'financial-insights' | 'predictions' | null;
+type ToolId = 'chat' | 'stock-analysis' | 'daily-report' | 'anomaly-detection' | 'financial-insights' | 'predictions';
 
 interface AITool {
   id: ToolId;
@@ -75,10 +74,9 @@ const AIAssistantPage = () => {
       'daily-report': '/ai-tools/daily-report',
       'anomaly-detection': '/ai-tools/anomaly-detection',
       'financial-insights': '/ai-tools/financial-insights',
-      'predictions': '/ai-tools/predictions',
-      null: '/ai-assistant'
+      'predictions': '/ai-tools/predictions'
     };
-    navigate(routes[toolId] || '/ai-assistant');
+    navigate(routes[toolId] ?? '/ai-assistant');
   };
 
   // Ana menü görünümü

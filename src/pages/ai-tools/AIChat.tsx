@@ -6,7 +6,7 @@ import { getCustomers } from '../../services/customerService';
 import { getOrders } from '../../services/orderService';
 import { getPersonnel } from '../../services/personnelService';
 import { getAllStockStatus } from '../../services/stockService';
-import { askYonetimAI, AINaturalAnswer } from '../../services/aiService';
+import { askYonetimAI } from '../../services/aiService';
 import { addErrorLog } from '../../services/userService';
 import { MessageCircle, Send, ArrowLeft, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';

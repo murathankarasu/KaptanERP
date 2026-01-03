@@ -15,7 +15,7 @@ export default function DailyReport() {
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState<AIDailyReport | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [, setAvailableDates] = useState<string[]>([]);
 
   useEffect(() => {
     loadAvailableDates();

@@ -19,7 +19,7 @@ export default function Dashboard() {
   const [dailyReport, setDailyReport] = useState<any>(null);
   const [loadingAI, setLoadingAI] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [, setAvailableDates] = useState<string[]>([]);
   const [loadingDailyReport, setLoadingDailyReport] = useState(false);
 
   useEffect(() => {
@@ -157,7 +157,6 @@ export default function Dashboard() {
       const currentCompany = getCurrentCompany();
       const companyId = currentCompany?.companyId;
       const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
       
       // Bugün için cache kontrolü yap
       const cached = await getCachedDailyReport(today, companyId);

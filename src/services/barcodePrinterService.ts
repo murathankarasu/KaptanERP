@@ -3,6 +3,27 @@
  * ESC/POS protokolü ile barkod yazıcılarına bağlanır
  */
 
+// Web Serial API types (browser global types)
+declare global {
+  interface SerialPort {
+    open(options: { baudRate: number }): Promise<void>;
+    close(): Promise<void>;
+    readable: ReadableStream<Uint8Array> | null;
+    writable: WritableStream<Uint8Array> | null;
+  }
+  
+  interface USBDevice {
+    open(): Promise<void>;
+    close(): Promise<void>;
+  }
+  
+  interface Navigator {
+    serial?: {
+      requestPort(): Promise<SerialPort>;
+    };
+  }
+}
+
 export interface PrinterConnection {
   type: 'usb' | 'serial' | 'network';
   port?: SerialPort | USBDevice;
@@ -85,7 +106,7 @@ export const connectSerialPrinter = async (baudRate: number = 9600): Promise<Ser
 /**
  * Ağ yazıcısına bağlan (HTTP/RAW)
  */
-export const connectNetworkPrinter = async (ipAddress: string, port: number = 9100): Promise<void> => {
+export const connectNetworkPrinter = async (_ipAddress: string, _port: number = 9100): Promise<void> => {
   // Network yazıcı için doğrudan HTTP/RAW protokolü kullanılır
   // Bu tarayıcı güvenlik kısıtlamaları nedeniyle backend'de yapılmalı
   // Şimdilik sadece interface tanımlıyoruz
@@ -118,7 +139,7 @@ export const sendToNetworkPrinter = async (ipAddress: string, port: number, data
   try {
     // CORS nedeniyle doğrudan fetch çalışmayabilir
     // Backend proxy gerekebilir
-    const response = await fetch(`http://${ipAddress}:${port}`, {
+    await fetch(`http://${ipAddress}:${port}`, {
       method: 'POST',
       body: data,
       headers: {
@@ -163,7 +184,6 @@ export const printBarcodeLabel = async (
 ): Promise<void> => {
   const printerType = options?.printerType || 'serial';
   const labelWidth = options?.labelWidth || 58; // 58mm standart etiket
-  const labelHeight = options?.labelHeight || 40; // 40mm standart etiket
   const barcodeType = options?.barcodeType || 'code128';
   const showText = options?.showText !== false;
 
