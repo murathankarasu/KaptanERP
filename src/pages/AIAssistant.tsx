@@ -1,247 +1,236 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { getCurrentCompany } from '../utils/getCurrentCompany';
-import { getCurrentUser } from '../utils/getCurrentUser';
-import { getAllStockStatus, getStockEntries, getStockOutputs } from '../services/stockService';
-import { getOrders } from '../services/orderService';
-import { getCustomers } from '../services/customerService';
-import { getPersonnel } from '../services/personnelService';
-import { generateAIStatusReport, generateDailyAIReport, askYonetimAI, AIStatusReport, AIDailyReport, AINaturalAnswer } from '../services/aiService';
-import { addErrorLog } from '../services/userService';
-import { Brain, MessageCircle, BarChart3, ListChecks } from 'lucide-react';
+import { Brain, MessageCircle, BarChart3, ListChecks, Sparkles, FileText, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
 
-type Mode = 'qa' | 'stock' | 'daily';
+type ToolId = 'chat' | 'stock-analysis' | 'daily-report' | 'anomaly-detection' | 'financial-insights' | 'predictions' | null;
+
+interface AITool {
+  id: ToolId;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  gradient: string;
+}
+
+const aiTools: AITool[] = [
+  {
+    id: 'chat',
+    title: 'AI Sohbet',
+    description: 'Doğal dilde sorular sorun, anında yanıt alın',
+    icon: <MessageCircle size={32} />,
+    color: '#4a90e2',
+    gradient: 'linear-gradient(135deg, #4a90e2 0%, #357abd 100%)'
+  },
+  {
+    id: 'stock-analysis',
+    title: 'Stok Analizi',
+    description: 'Stok durumunuzu detaylı analiz edin',
+    icon: <BarChart3 size={32} />,
+    color: '#28a745',
+    gradient: 'linear-gradient(135deg, #28a745 0%, #1e7e34 100%)'
+  },
+  {
+    id: 'daily-report',
+    title: 'Günlük Rapor',
+    description: 'Günlük özet raporlarınızı görüntüleyin',
+    icon: <ListChecks size={32} />,
+    color: '#ffc107',
+    gradient: 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)'
+  },
+  {
+    id: 'anomaly-detection',
+    title: 'Anomali Tespiti',
+    description: 'Sistemdeki anormal durumları tespit edin',
+    icon: <AlertTriangle size={32} />,
+    color: '#dc3545',
+    gradient: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
+  },
+  {
+    id: 'financial-insights',
+    title: 'Finansal Görünüm',
+    description: 'Finansal verilerinizi analiz edin',
+    icon: <TrendingUp size={32} />,
+    color: '#17a2b8',
+    gradient: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)'
+  },
+  {
+    id: 'predictions',
+    title: 'Tahminler',
+    description: 'Gelecek trendleri ve tahminleri görün',
+    icon: <Zap size={32} />,
+    color: '#6f42c1',
+    gradient: 'linear-gradient(135deg, #6f42c1 0%, #5a32a3 100%)'
+  }
+];
 
 const AIAssistantPage = () => {
-  const company = getCurrentCompany();
+  const navigate = useNavigate();
 
-  const [mode, setMode] = useState<Mode>('qa');
-  const [question, setQuestion] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [qaAnswer, setQaAnswer] = useState<AINaturalAnswer | null>(null);
-  const [stockReport, setStockReport] = useState<AIStatusReport | null>(null);
-  const [dailyReport, setDailyReport] = useState<AIDailyReport | null>(null);
-
-  const handleRun = async () => {
-    try {
-      setLoading(true);
-      setQaAnswer(null);
-      setStockReport(null);
-      setDailyReport(null);
-
-      const companyId = company?.companyId;
-      if (!companyId) {
-        alert('Şirket bilgisi bulunamadı. Lütfen yeniden giriş yapın.');
-        return;
-      }
-
-      if (mode === 'stock' || mode === 'daily') {
-        const [status, entries, outputs] = await Promise.all([
-          getAllStockStatus(companyId),
-          getStockEntries({ companyId }),
-          getStockOutputs({ companyId })
-        ]);
-
-        if (mode === 'stock') {
-          const report = await generateAIStatusReport(status, entries, outputs);
-          setStockReport(report);
-        } else {
-          const report = await generateDailyAIReport(status, entries, outputs);
-          setDailyReport(report);
-        }
-        return;
-      }
-
-      // Genel soru-cevap modu
-      const [customers, orders, personnel, stock] = await Promise.all([
-        getCustomers(companyId),
-        getOrders({ companyId }),
-        getPersonnel({ companyId }),
-        getAllStockStatus(companyId)
-      ]);
-
-      const context = {
-        companyId,
-        customers: customers.slice(0, 100),
-        orders: orders.slice(0, 100),
-        personnel: personnel.slice(0, 100),
-        stock: stock.slice(0, 100)
-      };
-
-      const answer = await askYonetimAI(question, context);
-      setQaAnswer(answer);
-    } catch (error: any) {
-      console.error('AI asistan hatası:', error);
-      const currentUser = getCurrentUser();
-      await addErrorLog(
-        `AI asistan hatası: ${error.message || error}`,
-        'AIAssistant',
-        currentUser?.id,
-        currentUser?.username
-      );
-      alert('AI işlemi sırasında hata oluştu.');
-    } finally {
-      setLoading(false);
-    }
+  const handleToolClick = (toolId: ToolId) => {
+    const routes: Record<ToolId, string> = {
+      'chat': '/ai-tools/chat',
+      'stock-analysis': '/ai-tools/stock-analysis',
+      'daily-report': '/ai-tools/daily-report',
+      'anomaly-detection': '/ai-tools/anomaly-detection',
+      'financial-insights': '/ai-tools/financial-insights',
+      'predictions': '/ai-tools/predictions',
+      null: '/ai-assistant'
+    };
+    navigate(routes[toolId] || '/ai-assistant');
   };
 
-  const renderOutput = () => {
-    if (mode === 'stock' && stockReport) {
-      return (
-        <div style={{ marginTop: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Stok Özeti</h3>
-          <p style={{ fontSize: '13px' }}>{stockReport.summary}</p>
-          {stockReport.criticalIssues.length > 0 && (
-            <>
-              <h4 style={{ fontSize: '14px', marginTop: '10px' }}>Kritik Konular</h4>
-              <ul>
-                {stockReport.criticalIssues.map((c, i) => (
-                  <li key={i} style={{ fontSize: '13px' }}>{c}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          {stockReport.recommendations.length > 0 && (
-            <>
-              <h4 style={{ fontSize: '14px', marginTop: '10px' }}>Öneriler</h4>
-              <ul>
-                {stockReport.recommendations.map((c, i) => (
-                  <li key={i} style={{ fontSize: '13px' }}>{c}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      );
-    }
-
-    if (mode === 'daily' && dailyReport) {
-      return (
-        <div style={{ marginTop: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Günlük Özet - {dailyReport.date}</h3>
-          <p style={{ fontSize: '13px' }}>{dailyReport.summary}</p>
-          {dailyReport.highlights.length > 0 && (
-            <>
-              <h4 style={{ fontSize: '14px', marginTop: '10px' }}>Öne Çıkanlar</h4>
-              <ul>
-                {dailyReport.highlights.map((c, i) => (
-                  <li key={i} style={{ fontSize: '13px' }}>{c}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          {dailyReport.warnings.length > 0 && (
-            <>
-              <h4 style={{ fontSize: '14px', marginTop: '10px' }}>Uyarılar</h4>
-              <ul>
-                {dailyReport.warnings.map((c, i) => (
-                  <li key={i} style={{ fontSize: '13px' }}>{c}</li>
-                ))}
-              </ul>
-            </>
-          )}
-          {dailyReport.recommendations.length > 0 && (
-            <>
-              <h4 style={{ fontSize: '14px', marginTop: '10px' }}>Öneriler</h4>
-              <ul>
-                {dailyReport.recommendations.map((c, i) => (
-                  <li key={i} style={{ fontSize: '13px' }}>{c}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      );
-    }
-
-    if (mode === 'qa' && qaAnswer) {
-      return (
-        <div style={{ marginTop: '16px', whiteSpace: 'pre-wrap', fontSize: '13px' }}>
-          {qaAnswer.answer}
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  const ModeIcon = mode === 'stock' ? BarChart3 : mode === 'daily' ? ListChecks : MessageCircle;
-
+  // Ana menü görünümü
   return (
-    <Layout>
-      <div style={{ padding: '30px', maxWidth: '800px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <Brain size={26} />
-          <div>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, margin: 0 }}>Yapay Zeka Asistanı</h1>
-            <p style={{ fontSize: '12px', color: '#555', margin: 0 }}>
-              Stok analizi, günlük özet ve serbest sorular için GPT tabanlı asistan.
+      <Layout>
+        <div style={{ 
+          padding: '20px', 
+          maxWidth: '1200px', 
+          margin: '0 auto',
+          minHeight: 'calc(100vh - 100px)'
+        }}>
+          {/* Başlık */}
+          <div style={{ 
+            marginBottom: '32px',
+            textAlign: 'center'
+          }}>
+            <div style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              width: '80px',
+              height: '80px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              marginBottom: '16px',
+              boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)'
+            }}>
+              <Brain size={40} color="#fff" />
+            </div>
+            <h1 style={{ 
+              fontSize: '32px', 
+              fontWeight: 700, 
+              margin: 0,
+              marginBottom: '8px',
+              color: '#000',
+              letterSpacing: '-1px'
+            }}>
+              Yapay Zeka Araçları
+            </h1>
+            <p style={{ 
+              fontSize: '14px', 
+              color: '#666', 
+              margin: 0,
+              maxWidth: '500px',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}>
+              İş süreçlerinizi optimize etmek için güçlü AI araçları
             </p>
           </div>
-        </div>
 
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setMode('qa')}
-            style={{ background: mode === 'qa' ? '#000' : '#f5f5f5', color: mode === 'qa' ? '#fff' : '#000' }}
-          >
-            <MessageCircle size={14} /> Serbest Soru
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setMode('stock')}
-            style={{ background: mode === 'stock' ? '#000' : '#f5f5f5', color: mode === 'stock' ? '#fff' : '#000' }}
-          >
-            <BarChart3 size={14} /> Stok Analizi
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setMode('daily')}
-            style={{ background: mode === 'daily' ? '#000' : '#f5f5f5', color: mode === 'daily' ? '#fff' : '#000' }}
-          >
-            <ListChecks size={14} /> Günlük Özet
-          </button>
-        </div>
+          {/* Araç Kartları Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '20px',
+            marginBottom: '40px'
+          }}>
+            {aiTools.map((tool) => (
+              <div
+                key={tool.id}
+                onClick={() => handleToolClick(tool.id)}
+                style={{
+                  background: 'white',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  border: '2px solid #000',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                }}
+              >
+                {/* Gradient Background */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '4px',
+                  background: tool.gradient
+                }} />
+                
+                {/* Icon */}
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '12px',
+                  background: tool.gradient,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '16px',
+                  color: 'white',
+                  boxShadow: `0 4px 12px ${tool.color}40`
+                }}>
+                  {tool.icon}
+                </div>
 
-        {mode === 'qa' && (
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
-              Sorunuz
-            </label>
-            <textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Örn: Bu ay en çok hangi müşteriye satış yaptık? veya Hangi ürünler kritik stokta?"
-              style={{ width: '100%', minHeight: '80px', padding: '8px', fontSize: '13px', border: '1px solid #ccc' }}
-            />
+                {/* Content */}
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  margin: 0,
+                  marginBottom: '8px',
+                  color: '#000',
+                  letterSpacing: '-0.5px'
+                }}>
+                  {tool.title}
+                </h3>
+                <p style={{
+                  fontSize: '13px',
+                  color: '#666',
+                  margin: 0,
+                  lineHeight: '1.6'
+                }}>
+                  {tool.description}
+                </p>
+
+                {/* Arrow Indicator */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '20px',
+                  right: '20px',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: '#f5f5f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid #e0e0e0'
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M6 12L10 8L6 4" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={handleRun}
-          disabled={loading || (mode === 'qa' && !question.trim())}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <ModeIcon size={16} />
-          {loading ? 'Analiz yapılıyor...' : 'Çalıştır'}
-        </button>
-
-        {renderOutput()}
-
-        <div style={{ marginTop: '20px', fontSize: '11px', color: '#888' }}>
-          Not: En uygun maliyet için `gpt-4o-mini` modeli kullanılmaktadır. Veriler sadece tarayıcınızdan OpenAI API&apos;sine özet olarak gönderilir.
         </div>
-      </div>
-    </Layout>
-  );
+      </Layout>
+    );
 };
 
 export default AIAssistantPage;
-
-

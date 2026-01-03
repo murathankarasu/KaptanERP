@@ -12,7 +12,9 @@ import { getCurrentUser } from '../utils/getCurrentUser';
 import { exportStockEntriesToExcel } from '../utils/excelExport';
 import { importStockEntriesFromExcel } from '../utils/excelImport';
 import AIFormatFixModal from '../components/AIFormatFixModal';
-import { Download, Plus, X, Upload, QrCode } from 'lucide-react';
+import { Download, Plus, X, Upload, QrCode, Printer } from 'lucide-react';
+import { printBarcodeLabel, printBarcodeViaBrowser } from '../services/barcodePrinterService';
+import { getCompanyById } from '../services/companyService';
 import { formatDate } from '../utils/formatDate';
 
 export default function StockEntry() {
@@ -27,6 +29,15 @@ export default function StockEntry() {
   const [aiFixedData, setAiFixedData] = useState<any[]>([]);
   const [showQRModal, setShowQRModal] = useState(false);
   const [selectedBarcode, setSelectedBarcode] = useState<string>('');
+  const [selectedEntry, setSelectedEntry] = useState<StockEntryType | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [showPrinterSettings, setShowPrinterSettings] = useState(false);
+  const [printerSettings, setPrinterSettings] = useState({
+    type: 'serial' as 'usb' | 'serial' | 'network',
+    ipAddress: '',
+    port: 9100,
+    barcodeType: 'code128' as 'code128' | 'code39'
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState({
     materialName: '',
@@ -57,14 +68,23 @@ export default function StockEntry() {
     binCode: '',
     serialLot: '',
     expiryDate: '',
-    note: '',
-    criticalLevel: ''
+    note: ''
   });
 
   useEffect(() => {
     loadEntries();
     loadWarehouses();
     loadProducts();
+    
+    // Yazıcı ayarlarını yükle
+    const savedSettings = localStorage.getItem('barcodePrinterSettings');
+    if (savedSettings) {
+      try {
+        setPrinterSettings(JSON.parse(savedSettings));
+      } catch (e) {
+        console.error('Yazıcı ayarları yüklenirken hata:', e);
+      }
+    }
   }, [filters]);
 
   // Stok kartından gelen ön-dolum (query parametreleri)
@@ -200,7 +220,6 @@ export default function StockEntry() {
     // Sayısal alan validasyonu
     const quantity = parseFloat(formData.quantity);
     const unitPrice = formData.unitPrice ? parseFloat(formData.unitPrice) : 0;
-    const criticalLevel = formData.criticalLevel ? parseFloat(formData.criticalLevel) : 0;
     
     if (isNaN(quantity) || quantity <= 0) {
       alert('Gelen Miktar geçerli bir sayı olmalı ve 0\'dan büyük olmalıdır');
@@ -219,11 +238,6 @@ export default function StockEntry() {
     
     if (!formData.warehouse) {
       alert('Depo seçimi zorunludur');
-      return;
-    }
-    
-    if (formData.criticalLevel && (isNaN(criticalLevel) || criticalLevel < 0)) {
-      alert('Kritik Seviye geçerli bir sayı olmalıdır');
       return;
     }
     
@@ -274,6 +288,10 @@ export default function StockEntry() {
       };
 
       const entryId = await addStockEntry(entry);
+      
+      // Ürün kartından kritik seviyeyi al
+      const selectedProduct = products.find(p => p.id === selectedProductId);
+      const criticalLevel = selectedProduct?.criticalLevel || 0;
       
       // Stok durumunu güncelle (depo bilgisi ile)
       await updateStockStatusOnEntry(
@@ -330,8 +348,7 @@ export default function StockEntry() {
         binCode: '',
         serialLot: '',
         expiryDate: '',
-        note: '',
-        criticalLevel: ''
+        note: ''
       });
       loadEntries();
     } catch (error: any) {
@@ -413,13 +430,23 @@ export default function StockEntry() {
         try {
           await addStockEntry(entry);
           
-          // Stok durumunu güncelle (depo bilgisi ile)
+          // Ürün kartından kritik seviyeyi al
           const currentCompany = getCurrentCompany();
+          let criticalLevel = 0;
+          if (entry.sku) {
+            const product = products.find(p => p.sku === entry.sku);
+            criticalLevel = product?.criticalLevel || 0;
+          } else if (entry.materialName) {
+            const product = products.find(p => p.name === entry.materialName);
+            criticalLevel = product?.criticalLevel || 0;
+          }
+          
+          // Stok durumunu güncelle (depo bilgisi ile)
           await updateStockStatusOnEntry(
             entry.materialName,
             entry.quantity,
             entry.unit,
-            0, // Kritik seviye import'ta belirtilmemişse 0
+            criticalLevel,
             currentCompany?.companyId,
             entry.warehouse || undefined,
             entry.sku || undefined,
@@ -764,30 +791,6 @@ export default function StockEntry() {
                     onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
                   />
                 </div>
-                <div className="excel-form-group">
-                  <label className="excel-form-label">Kritik Seviye</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="excel-form-input"
-                    value={formData.criticalLevel}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                        setFormData({ ...formData, criticalLevel: value });
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const value = e.target.value;
-                      if (value && (isNaN(parseFloat(value)) || parseFloat(value) < 0)) {
-                        e.target.setCustomValidity('Geçerli bir sayı giriniz');
-                      } else {
-                        e.target.setCustomValidity('');
-                      }
-                    }}
-                  />
-                </div>
               </div>
               <div className="excel-form-group">
                 <label className="excel-form-label">Not</label>
@@ -922,6 +925,7 @@ export default function StockEntry() {
                           <button
                             onClick={() => {
                               setSelectedBarcode(entry.barcode!);
+                              setSelectedEntry(entry);
                               setShowQRModal(true);
                             }}
                             style={{
@@ -1001,11 +1005,22 @@ export default function StockEntry() {
                   
                   if (entry.materialName && entry.category && entry.unit) {
                     await addStockEntry(entry);
+                    
+                    // Ürün kartından kritik seviyeyi al
+                    let criticalLevel = 0;
+                    if (entry.sku) {
+                      const product = products.find(p => p.sku === entry.sku);
+                      criticalLevel = product?.criticalLevel || 0;
+                    } else if (entry.materialName) {
+                      const product = products.find(p => p.name === entry.materialName);
+                      criticalLevel = product?.criticalLevel || 0;
+                    }
+                    
                     await updateStockStatusOnEntry(
                       entry.materialName,
                       entry.quantity,
                       entry.unit,
-                      0,
+                      criticalLevel,
                       currentCompany?.companyId,
                       entry.warehouse || undefined,
                       entry.sku || undefined,
@@ -1108,28 +1123,437 @@ export default function StockEntry() {
                 </div>
               </div>
               
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>
+              <div style={{ fontSize: '12px', color: '#666', marginBottom: '20px' }}>
                 Bu QR kodu telefonunuzla okutarak ürün bilgilerine erişebilirsiniz.
               </div>
               
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              {/* Yazdırma Butonları - Modern UI */}
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px',
+                marginBottom: '15px'
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '10px'
+                }}>
+                  <button
+                    onClick={async () => {
+                      try {
+                        setPrinting(true);
+                        // Şirket bilgilerini al
+                        const currentCompany = getCurrentCompany();
+                        let companyInfo: any = {};
+                        if (currentCompany?.companyId) {
+                          const company = await getCompanyById(currentCompany.companyId);
+                          if (company) {
+                            companyInfo = {
+                              name: company.name,
+                              logoUrl: company.logoUrl,
+                              companyCode: currentCompany?.companyCode || '',
+                              website: company.description?.match(/www\.[^\s]+/)?.[0] || '',
+                              email: company.description?.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || ''
+                            };
+                          }
+                        }
+                        
+                        await printBarcodeLabel(
+                          selectedBarcode,
+                          selectedEntry?.materialName,
+                          selectedEntry?.sku,
+                          selectedEntry?.variant,
+                          selectedEntry?.arrivalDate ? new Date(selectedEntry.arrivalDate) : undefined,
+                          companyInfo,
+                          {
+                            printerType: printerSettings.type,
+                            ipAddress: printerSettings.type === 'network' ? printerSettings.ipAddress : undefined,
+                            port: printerSettings.type === 'network' ? printerSettings.port : undefined,
+                            barcodeType: printerSettings.barcodeType,
+                            showText: true
+                          }
+                        );
+                        alert('Barkod yazıcıya gönderildi!');
+                      } catch (error: any) {
+                        console.error('Yazdırma hatası:', error);
+                        // Fallback: Tarayıcı yazdırma
+                        if (confirm('Yazıcıya bağlanılamadı. Tarayıcı yazdırma ile devam etmek ister misiniz?')) {
+                          const currentCompany = getCurrentCompany();
+                          let companyInfo: any = {};
+                          if (currentCompany?.companyId) {
+                            const company = await getCompanyById(currentCompany.companyId);
+                            if (company) {
+                              companyInfo = {
+                                name: company.name,
+                                logoUrl: company.logoUrl,
+                                companyCode: currentCompany?.companyCode || '',
+                                website: company.description?.match(/www\.[^\s]+/)?.[0] || '',
+                                email: company.description?.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || ''
+                              };
+                            }
+                          }
+                          await printBarcodeViaBrowser(
+                            selectedBarcode,
+                            selectedEntry?.materialName,
+                            selectedEntry?.sku,
+                            selectedEntry?.variant,
+                            selectedEntry?.arrivalDate ? new Date(selectedEntry.arrivalDate) : undefined,
+                            companyInfo
+                          );
+                        }
+                      } finally {
+                        setPrinting(false);
+                      }
+                    }}
+                    disabled={printing}
+                    style={{
+                      padding: '14px 20px',
+                      background: printing ? '#ccc' : '#000',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: printing ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      transition: 'all 0.2s',
+                      boxShadow: printing ? 'none' : '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!printing) {
+                        e.currentTarget.style.background = '#333';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!printing) {
+                        e.currentTarget.style.background = '#000';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                      }
+                    }}
+                  >
+                    <Printer size={18} />
+                    {printing ? 'Yazdırılıyor...' : 'Yazıcıya Yazdır'}
+                  </button>
+                  
+                  <button
+                    onClick={async () => {
+                      // Şirket bilgilerini al
+                      const currentCompany = getCurrentCompany();
+                      let companyInfo: any = {};
+                      if (currentCompany?.companyId) {
+                        const company = await getCompanyById(currentCompany.companyId);
+                        if (company) {
+                          companyInfo = {
+                            name: company.name,
+                            logoUrl: company.logoUrl,
+                            companyCode: currentCompany?.companyCode || '',
+                            website: company.description?.match(/www\.[^\s]+/)?.[0] || '',
+                            email: company.description?.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || ''
+                          };
+                        }
+                      }
+                      await printBarcodeViaBrowser(
+                        selectedBarcode,
+                        selectedEntry?.materialName,
+                        selectedEntry?.sku,
+                        selectedEntry?.variant,
+                        selectedEntry?.arrivalDate ? new Date(selectedEntry.arrivalDate) : undefined,
+                        companyInfo
+                      );
+                    }}
+                    style={{
+                      padding: '14px 20px',
+                      background: '#fff',
+                      color: '#000',
+                      border: '2px solid #000',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f5f5f5';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                    }}
+                  >
+                    <Printer size={18} />
+                    Tarayıcı ile Yazdır
+                  </button>
+                </div>
+                
+                <div style={{
+                  display: 'flex',
+                  gap: '10px',
+                  justifyContent: 'center'
+                }}>
+                  <button
+                    onClick={() => setShowPrinterSettings(true)}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#fff',
+                      color: '#666',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f9f9f9';
+                      e.currentTarget.style.borderColor = '#000';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.borderColor = '#ddd';
+                    }}
+                  >
+                    ⚙️ Ayarlar
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      const companyCode = getCurrentCompany()?.companyCode || '';
+                      const url = `${window.location.origin}/barcode-scanner?companyCode=${encodeURIComponent(companyCode)}&barcode=${selectedBarcode}`;
+                      navigator.clipboard.writeText(url);
+                      alert('Link kopyalandı!');
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#fff',
+                      color: '#666',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f9f9f9';
+                      e.currentTarget.style.borderColor = '#000';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.borderColor = '#ddd';
+                    }}
+                  >
+                    📋 Linki Kopyala
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setShowQRModal(false);
+                      setSelectedEntry(null);
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#fff',
+                      color: '#666',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f9f9f9';
+                      e.currentTarget.style.borderColor = '#000';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.borderColor = '#ddd';
+                    }}
+                  >
+                    Kapat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Yazıcı Ayarları Modal */}
+        {showPrinterSettings && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000
+          }} onClick={() => setShowPrinterSettings(false)}>
+            <div style={{
+              background: '#fff',
+              padding: '30px',
+              borderRadius: '12px',
+              maxWidth: '500px',
+              width: '90%',
+              border: '2px solid #000'
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>Yazıcı Ayarları</h3>
                 <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    const companyCode = getCurrentCompany()?.companyCode || '';
-                    const url = `${window.location.origin}/barcode-scanner?companyCode=${encodeURIComponent(companyCode)}&barcode=${selectedBarcode}`;
-                    navigator.clipboard.writeText(url);
-                    alert('Link kopyalandı!');
+                  onClick={() => setShowPrinterSettings(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center'
                   }}
                 >
-                  Linki Kopyala
+                  <X size={24} />
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowQRModal(false)}
-                >
-                  Kapat
-                </button>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                    Yazıcı Tipi
+                  </label>
+                  <select
+                    value={printerSettings.type}
+                    onChange={(e) => setPrinterSettings({ ...printerSettings, type: e.target.value as any })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #000',
+                      borderRadius: '0',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="serial">USB/Seri Port</option>
+                    <option value="network">Ağ Yazıcısı (Network)</option>
+                  </select>
+                </div>
+
+                {printerSettings.type === 'network' && (
+                  <>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                        IP Adresi
+                      </label>
+                      <input
+                        type="text"
+                        value={printerSettings.ipAddress}
+                        onChange={(e) => setPrinterSettings({ ...printerSettings, ipAddress: e.target.value })}
+                        placeholder="Örn: 192.168.1.100"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '2px solid #000',
+                          borderRadius: '0',
+                          fontSize: '14px'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                        Port
+                      </label>
+                      <input
+                        type="number"
+                        value={printerSettings.port}
+                        onChange={(e) => setPrinterSettings({ ...printerSettings, port: parseInt(e.target.value) || 9100 })}
+                        placeholder="9100"
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          border: '2px solid #000',
+                          borderRadius: '0',
+                          fontSize: '14px'
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                    Barkod Tipi
+                  </label>
+                  <select
+                    value={printerSettings.barcodeType}
+                    onChange={(e) => setPrinterSettings({ ...printerSettings, barcodeType: e.target.value as any })}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      border: '2px solid #000',
+                      borderRadius: '0',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value="code128">Code128 (Önerilen)</option>
+                    <option value="code39">Code39</option>
+                  </select>
+                </div>
+
+                <div style={{
+                  padding: '12px',
+                  background: '#f5f5f5',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  color: '#666'
+                }}>
+                  <strong>Notlar:</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
+                    <li>USB/Seri Port: Chrome veya Edge tarayıcısı gerekir</li>
+                    <li>Ağ Yazıcısı: IP adresi ve port numarası gerekir (genellikle 9100)</li>
+                    <li>Ayarlar tarayıcıda saklanır</li>
+                  </ul>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      // Ayarları localStorage'a kaydet
+                      localStorage.setItem('barcodePrinterSettings', JSON.stringify(printerSettings));
+                      setShowPrinterSettings(false);
+                      alert('Ayarlar kaydedildi!');
+                    }}
+                  >
+                    Kaydet
+                  </button>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowPrinterSettings(false)}
+                  >
+                    İptal
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -16,6 +16,7 @@ export default function StockStatusPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'green' | 'orange' | 'red'>('all');
   const [filterWarehouse, setFilterWarehouse] = useState<string>('all');
   const [filterSku, setFilterSku] = useState('');
+  const [filterMaterialName, setFilterMaterialName] = useState('');
   const [filterVariant, setFilterVariant] = useState('');
   const [filterBin, setFilterBin] = useState('');
   const didBackfillRef = useRef(false);
@@ -23,7 +24,7 @@ export default function StockStatusPage() {
   useEffect(() => {
     loadStockStatus();
     loadWarehouses();
-  }, [filterWarehouse]);
+  }, [filterWarehouse, filterSku, filterMaterialName, filterVariant, filterBin]);
 
   const loadStockStatus = async () => {
     try {
@@ -35,7 +36,8 @@ export default function StockStatusPage() {
         warehouse,
         filterSku || undefined,
         filterVariant || undefined,
-        filterBin || undefined
+        filterBin || undefined,
+        filterMaterialName || undefined
       );
       setStockStatus(data);
 
@@ -202,7 +204,17 @@ export default function StockStatusPage() {
                 value={filterSku}
                 onChange={(e) => setFilterSku(e.target.value)}
                 style={{ padding: '8px 12px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
-                placeholder="SKU"
+                placeholder="SKU ile ara"
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontWeight: '600', color: '#000' }}>Malzeme Adı</span>
+              <input
+                type="text"
+                value={filterMaterialName}
+                onChange={(e) => setFilterMaterialName(e.target.value)}
+                style={{ padding: '8px 12px', border: '2px solid #000', borderRadius: '0', fontSize: '14px' }}
+                placeholder="Malzeme adı ile ara"
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

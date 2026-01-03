@@ -24,6 +24,7 @@ export interface Product {
   variant?: ProductVariant;
   lotTracking?: boolean;
   expiryRequired?: boolean;
+  criticalLevel?: number; // Kritik stok seviyesi
   companyId?: string;
   createdAt?: Date;
   updatedAt?: Date;

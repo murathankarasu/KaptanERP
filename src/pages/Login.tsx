@@ -397,18 +397,6 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Giriş Tipi Seçimi */}
-          <div style={{
-            marginBottom: '24px',
-            border: '2px solid #000',
-            padding: '12px',
-            background: 'white',
-            fontSize: '13px',
-            color: '#333'
-          }}>
-            Şifre ile giriş yapın.
-          </div>
-
           {error && (
             <div style={{
               background: '#fff',

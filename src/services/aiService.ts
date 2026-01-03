@@ -569,9 +569,22 @@ Lütfen şu formatta JSON döndür:
 export const generateDailyAIReport = async (
   stockStatus: any[],
   entries: any[],
-  outputs: any[]
+  outputs: any[],
+  companyId?: string,
+  targetDate?: Date,
+  forceRegenerate: boolean = false
 ): Promise<AIDailyReport> => {
   try {
+    // Cache kontrolü - eğer forceRegenerate false ise ve targetDate verilmişse cache'den kontrol et
+    if (!forceRegenerate) {
+      const { getCachedDailyReport } = await import('./aiReportCacheService');
+      const dateToCheck = targetDate || new Date();
+      const cached = await getCachedDailyReport(dateToCheck, companyId);
+      if (cached) {
+        return cached;
+      }
+    }
+
     if (!apiKey || apiKey === 'your_openai_api_key_here') {
       return {
         date: new Date().toLocaleDateString('tr-TR'),
@@ -582,7 +595,7 @@ export const generateDailyAIReport = async (
       };
     }
 
-    const today = new Date();
+    const today = targetDate || new Date();
     const todayEntries = entries.filter(e => {
       const entryDate = resolveDate(e.arrivalDate);
       return entryDate ? entryDate.toDateString() === today.toDateString() : false;
@@ -645,21 +658,33 @@ Lütfen şu formatta JSON döndür:
     const report = parseAIJson(response);
     try {
       if (!report) throw new Error('parse_failed');
-      return {
+      const finalReport: AIDailyReport = {
         date: dataSummary.date,
         summary: report.summary || 'Rapor oluşturulamadı',
         highlights: report.highlights || [],
         warnings: report.warnings || [],
         recommendations: report.recommendations || []
       };
+      
+      // Raporu cache'e kaydet
+      const { saveDailyReportToCache } = await import('./aiReportCacheService');
+      await saveDailyReportToCache(finalReport, companyId);
+      
+      return finalReport;
     } catch (parseError) {
-      return {
+      const fallbackReport: AIDailyReport = {
         date: dataSummary.date,
         summary: response.substring(0, 300),
         highlights: [],
         warnings: [],
         recommendations: []
       };
+      
+      // Fallback raporu da cache'e kaydet
+      const { saveDailyReportToCache } = await import('./aiReportCacheService');
+      await saveDailyReportToCache(fallbackReport, companyId);
+      
+      return fallbackReport;
     }
   } catch (error: any) {
     console.error('Günlük AI rapor hatası:', error);

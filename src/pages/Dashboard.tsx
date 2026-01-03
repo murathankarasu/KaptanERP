@@ -6,7 +6,8 @@ import { generateAIStatusReport, generateDailyAIReport } from '../services/aiSer
 import { addErrorLog } from '../services/userService';
 import { getCurrentCompany } from '../utils/getCurrentCompany';
 import { formatDate } from '../utils/formatDate';
-import { Package, AlertTriangle, TrendingUp, Brain, FileText } from 'lucide-react';
+import { getCachedDailyReport, getRecentCachedReports } from '../services/aiReportCacheService';
+import { Package, AlertTriangle, TrendingUp, Brain, FileText, Calendar, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, Legend } from 'recharts';
 
 export default function Dashboard() {
@@ -17,10 +18,20 @@ export default function Dashboard() {
   const [aiReport, setAiReport] = useState<any>(null);
   const [dailyReport, setDailyReport] = useState<any>(null);
   const [loadingAI, setLoadingAI] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [loadingDailyReport, setLoadingDailyReport] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
+    loadAvailableDates();
   }, []);
+
+  useEffect(() => {
+    if (selectedDate) {
+      loadDailyReportForDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   const loadDashboardData = async () => {
     try {
@@ -74,10 +85,58 @@ export default function Dashboard() {
     }
   };
 
-  const loadDailyAIReport = async (statuses: StockStatus[], entries: StockEntry[], outputs: StockOutput[]) => {
+  const loadAvailableDates = async () => {
     try {
-      const report = await generateDailyAIReport(statuses, entries, outputs);
+      const currentCompany = getCurrentCompany();
+      const companyId = currentCompany?.companyId;
+      const recentReports = await getRecentCachedReports(30, companyId);
+      const dates = recentReports.map(r => {
+        // Tarih formatını YYYY-MM-DD'ye çevir
+        const dateStr = r.date;
+        // tr-TR formatından (DD.MM.YYYY) ISO formatına çevir
+        if (dateStr.includes('.')) {
+          const [day, month, year] = dateStr.split('.');
+          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        return dateStr;
+      });
+      // Bugünün tarihini de ekle
+      const today = new Date().toISOString().split('T')[0];
+      if (!dates.includes(today)) {
+        dates.unshift(today);
+      }
+      setAvailableDates([...new Set(dates)].sort().reverse());
+    } catch (error) {
+      console.error('Mevcut tarihler yüklenirken hata:', error);
+    }
+  };
+
+  const loadDailyReportForDate = async (dateStr: string) => {
+    try {
+      setLoadingDailyReport(true);
+      const currentCompany = getCurrentCompany();
+      const companyId = currentCompany?.companyId;
+      const targetDate = new Date(dateStr);
+      
+      // Önce cache'den kontrol et
+      const cached = await getCachedDailyReport(targetDate, companyId);
+      if (cached) {
+        setDailyReport(cached);
+        setLoadingDailyReport(false);
+        return;
+      }
+
+      // Cache'de yoksa yeni rapor oluştur
+      const [statuses, entries, outputs] = await Promise.all([
+        getAllStockStatus(companyId),
+        getStockEntries(companyId ? { companyId } : undefined),
+        getStockOutputs(companyId ? { companyId } : undefined)
+      ]);
+
+      const report = await generateDailyAIReport(statuses, entries, outputs, companyId, targetDate);
       setDailyReport(report);
+      // Tarih listesini güncelle
+      await loadAvailableDates();
     } catch (error: any) {
       console.error('Günlük AI rapor yüklenirken hata:', error);
       const currentUser = localStorage.getItem('currentUser');
@@ -88,6 +147,63 @@ export default function Dashboard() {
         userInfo?.id,
         userInfo?.username
       );
+    } finally {
+      setLoadingDailyReport(false);
+    }
+  };
+
+  const loadDailyAIReport = async (statuses: StockStatus[], entries: StockEntry[], outputs: StockOutput[]) => {
+    try {
+      const currentCompany = getCurrentCompany();
+      const companyId = currentCompany?.companyId;
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      
+      // Bugün için cache kontrolü yap
+      const cached = await getCachedDailyReport(today, companyId);
+      if (cached) {
+        setDailyReport(cached);
+        return;
+      }
+
+      // Cache'de yoksa yeni rapor oluştur
+      const report = await generateDailyAIReport(statuses, entries, outputs, companyId, today);
+      setDailyReport(report);
+      await loadAvailableDates();
+    } catch (error: any) {
+      console.error('Günlük AI rapor yüklenirken hata:', error);
+      const currentUser = localStorage.getItem('currentUser');
+      const userInfo = currentUser ? JSON.parse(currentUser) : null;
+      await addErrorLog(
+        `Günlük AI rapor yüklenirken hata: ${error.message || error}`,
+        'Dashboard',
+        userInfo?.id,
+        userInfo?.username
+      );
+    }
+  };
+
+  const handleRegenerateReport = async () => {
+    try {
+      setLoadingDailyReport(true);
+      const currentCompany = getCurrentCompany();
+      const companyId = currentCompany?.companyId;
+      const targetDate = new Date(selectedDate);
+      
+      const [statuses, entries, outputs] = await Promise.all([
+        getAllStockStatus(companyId),
+        getStockEntries(companyId ? { companyId } : undefined),
+        getStockOutputs(companyId ? { companyId } : undefined)
+      ]);
+
+      // forceRegenerate: true ile yeni rapor oluştur
+      const report = await generateDailyAIReport(statuses, entries, outputs, companyId, targetDate, true);
+      setDailyReport(report);
+      await loadAvailableDates();
+    } catch (error: any) {
+      console.error('Rapor yenileme hatası:', error);
+    } finally {
+      setLoadingDailyReport(false);
     }
   };
 
@@ -398,20 +514,68 @@ export default function Dashboard() {
           marginBottom: '30px'
         }}>
           {/* Günlük AI Raporu */}
-          {dailyReport && (
-            <div style={{
-              background: 'white',
-              padding: '24px',
-              borderRadius: '0',
-              border: '2px solid #000'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <div style={{
+            background: 'white',
+            padding: '24px',
+            borderRadius: '0',
+            border: '2px solid #000'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Brain size={20} color="#000" />
                 <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#000', letterSpacing: '0.5px', textTransform: 'uppercase', margin: 0 }}>
-                  Günlük AI Raporu - {dailyReport.date}
+                  Günlük AI Raporu
                 </h3>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calendar size={16} color="#000" />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    style={{
+                      padding: '6px 10px',
+                      border: '2px solid #000',
+                      borderRadius: '0',
+                      fontSize: '13px',
+                      background: 'white',
+                      color: '#000'
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleRegenerateReport}
+                  disabled={loadingDailyReport}
+                  style={{
+                    padding: '6px 12px',
+                    border: '2px solid #000',
+                    borderRadius: '0',
+                    background: loadingDailyReport ? '#ccc' : '#000',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: loadingDailyReport ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Raporu yeniden oluştur"
+                >
+                  <RefreshCw size={14} />
+                  {loadingDailyReport ? 'Yükleniyor...' : 'Yenile'}
+                </button>
+              </div>
+            </div>
+            {loadingDailyReport ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                Rapor yükleniyor...
+              </div>
+            ) : dailyReport ? (
               <div style={{ fontSize: '14px', lineHeight: '1.8', color: '#000' }}>
+                <p style={{ marginBottom: '8px', fontSize: '12px', color: '#666', fontWeight: '600' }}>
+                  Tarih: {dailyReport.date}
+                </p>
                 <p style={{ marginBottom: '16px', fontWeight: '500' }}>{dailyReport.summary}</p>
                 {dailyReport.highlights && dailyReport.highlights.length > 0 && (
                   <div style={{ marginBottom: '16px' }}>
@@ -444,8 +608,12 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#666', fontSize: '13px' }}>
+                Seçilen tarih için rapor bulunamadı. "Yenile" butonuna tıklayarak yeni rapor oluşturabilirsiniz.
+              </div>
+            )}
+          </div>
 
           {/* AI Durum Raporu */}
           <div style={{

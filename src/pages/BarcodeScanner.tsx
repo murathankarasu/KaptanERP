@@ -630,49 +630,6 @@ export default function BarcodeScanner() {
                 </div>
               )}
 
-              {/* Stok Durumu - Fiş Altında */}
-              {stockStatus && (
-                <div style={{
-                  borderTop: '2px dashed #ccc',
-                  paddingTop: '20px',
-                  marginTop: '20px'
-                }}>
-                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px', textTransform: 'uppercase', textAlign: 'center' }}>
-                    STOK DURUMU
-                  </div>
-                  <div style={{
-                    padding: '16px',
-                    background: stockStatus.status === 'green' ? '#e8f5e9' : stockStatus.status === 'orange' ? '#fff3e0' : '#ffebee',
-                    border: `2px solid ${stockStatus.status === 'green' ? '#4caf50' : stockStatus.status === 'orange' ? '#ff9800' : '#f44336'}`,
-                    borderRadius: '8px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '10px', color: '#666', marginBottom: '8px', textTransform: 'uppercase' }}>
-                      MEVCUT STOK
-                    </div>
-                    <div style={{
-                      fontSize: '36px',
-                      fontWeight: 700,
-                      color: stockStatus.status === 'green' ? '#2e7d32' : stockStatus.status === 'orange' ? '#e65100' : '#c62828',
-                      marginBottom: '4px'
-                    }}>
-                      {stockStatus.currentStock.toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#666' }}>{stockStatus.unit}</div>
-                    <div style={{
-                      fontSize: '11px',
-                      marginTop: '8px',
-                      fontWeight: 600,
-                      color: stockStatus.status === 'green' ? '#2e7d32' : stockStatus.status === 'orange' ? '#e65100' : '#c62828'
-                    }}>
-                      {stockStatus.status === 'green' ? '✅ Yeterli Stok' :
-                       stockStatus.status === 'orange' ? '⚠️ Dikkat' :
-                       '🔴 Kritik Seviye'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Fiş Alt Bilgi */}
               <div style={{
                 borderTop: '2px dashed #ccc',
@@ -957,49 +914,6 @@ export default function BarcodeScanner() {
                     NOT
                   </div>
                   <div style={{ fontSize: '13px' }}>{stockEntry.note}</div>
-                </div>
-              )}
-
-              {/* Stok Durumu - Fiş Altında */}
-              {stockStatus && (
-                <div style={{
-                  borderTop: '2px dashed #ccc',
-                  paddingTop: '20px',
-                  marginTop: '20px'
-                }}>
-                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px', textTransform: 'uppercase', textAlign: 'center' }}>
-                    STOK DURUMU
-                  </div>
-                  <div style={{
-                    padding: '16px',
-                    background: stockStatus.status === 'green' ? '#e8f5e9' : stockStatus.status === 'orange' ? '#fff3e0' : '#ffebee',
-                    border: `2px solid ${stockStatus.status === 'green' ? '#4caf50' : stockStatus.status === 'orange' ? '#ff9800' : '#f44336'}`,
-                    borderRadius: '8px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ fontSize: '10px', color: '#666', marginBottom: '8px', textTransform: 'uppercase' }}>
-                      MEVCUT STOK
-                    </div>
-                    <div style={{
-                      fontSize: '36px',
-                      fontWeight: 700,
-                      color: stockStatus.status === 'green' ? '#2e7d32' : stockStatus.status === 'orange' ? '#e65100' : '#c62828',
-                      marginBottom: '4px'
-                    }}>
-                      {stockStatus.currentStock.toFixed(2)}
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#666' }}>{stockStatus.unit}</div>
-                    <div style={{
-                      fontSize: '11px',
-                      marginTop: '8px',
-                      fontWeight: 600,
-                      color: stockStatus.status === 'green' ? '#2e7d32' : stockStatus.status === 'orange' ? '#e65100' : '#c62828'
-                    }}>
-                      {stockStatus.status === 'green' ? '✅ Yeterli Stok' :
-                       stockStatus.status === 'orange' ? '⚠️ Dikkat' :
-                       '🔴 Kritik Seviye'}
-                    </div>
-                  </div>
                 </div>
               )}
 

@@ -526,16 +526,14 @@ const updateStockStatus = async (materialName: string, quantityChange: number, c
 };
 
 // Tüm Stok Durumlarını Getirme
-export const getAllStockStatus = async (companyId?: string, warehouse?: string, sku?: string, variant?: string, binCode?: string): Promise<StockStatus[]> => {
+export const getAllStockStatus = async (companyId?: string, warehouse?: string, sku?: string, variant?: string, binCode?: string, materialName?: string): Promise<StockStatus[]> => {
   try {
+    // Temel sorgu - sadece companyId ve warehouse ile filtrele (Firestore'da exact match)
     let q = companyId
       ? query(collection(db, 'stockStatus'), where('companyId', '==', companyId))
       : query(collection(db, 'stockStatus'));
     
     if (warehouse) q = query(q, where('warehouse', '==', warehouse));
-    if (sku) q = query(q, where('sku', '==', sku));
-    if (variant) q = query(q, where('variant', '==', variant));
-    if (binCode) q = query(q, where('binCode', '==', binCode));
     
     const querySnapshot = await getDocs(q);
     const statuses: StockStatus[] = [];
@@ -548,8 +546,31 @@ export const getAllStockStatus = async (companyId?: string, warehouse?: string, 
       } as StockStatus);
     });
     
+    // Client-side filtreleme (SKU, malzeme adı, varyant, binCode için kısmi eşleşme)
+    let filtered = statuses;
+    
+    if (sku) {
+      const skuLower = sku.toLowerCase().trim();
+      filtered = filtered.filter(s => s.sku?.toLowerCase().includes(skuLower));
+    }
+    
+    if (materialName) {
+      const materialNameLower = materialName.toLowerCase().trim();
+      filtered = filtered.filter(s => s.materialName.toLowerCase().includes(materialNameLower));
+    }
+    
+    if (variant) {
+      const variantLower = variant.toLowerCase().trim();
+      filtered = filtered.filter(s => s.variant?.toLowerCase().includes(variantLower));
+    }
+    
+    if (binCode) {
+      const binCodeLower = binCode.toLowerCase().trim();
+      filtered = filtered.filter(s => s.binCode?.toLowerCase().includes(binCodeLower));
+    }
+    
     // Önce depoya göre, sonra malzeme adına göre sırala
-    return statuses.sort((a, b) => {
+    return filtered.sort((a, b) => {
       const warehouseCompare = (a.warehouse || '').localeCompare(b.warehouse || '');
       if (warehouseCompare !== 0) return warehouseCompare;
       return a.materialName.localeCompare(b.materialName);

@@ -20,6 +20,7 @@ const emptyForm = {
   variantColor: '',
   variantSize: '',
   autoSku: false,
+  criticalLevel: '',
   conversions: [] as UnitConversion[]
 };
 
@@ -88,6 +89,7 @@ export default function ProductManagement() {
       baseUnit: form.baseUnit,
       variant: form.variantColor || form.variantSize ? { color: form.variantColor || undefined, size: form.variantSize || undefined } : undefined,
       units: form.conversions.length ? form.conversions : undefined,
+      criticalLevel: form.criticalLevel ? parseFloat(form.criticalLevel) : undefined,
       companyId: company?.companyId
     };
     try {
@@ -116,6 +118,7 @@ export default function ProductManagement() {
       variantColor: p.variant?.color || '',
       variantSize: p.variant?.size || '',
       autoSku: false,
+      criticalLevel: p.criticalLevel?.toString() || '',
       conversions: p.units || []
     });
     setConvForm({ fromUnit: '', toUnit: '', factor: '' });
@@ -283,6 +286,26 @@ export default function ProductManagement() {
                   <label className="excel-form-label">Varyant Beden</label>
                   <input className="excel-form-input" value={form.variantSize} onChange={(e) => setForm({ ...form, variantSize: e.target.value })} />
                 </div>
+                <div className="excel-form-group">
+                  <label className="excel-form-label">Kritik Seviye</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="excel-form-input" 
+                    value={form.criticalLevel} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                        setForm({ ...form, criticalLevel: value });
+                      }
+                    }}
+                    placeholder="Kritik stok seviyesi (opsiyonel)"
+                  />
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                    Stok bu seviyenin altına düştüğünde uyarı verilir
+                  </div>
+                </div>
               </div>
 
               <div style={{ marginTop: '15px', border: '1px solid #e0e0e0', padding: '12px' }}>
@@ -364,6 +387,7 @@ export default function ProductManagement() {
                   <th>Kategori</th>
                   <th>Temel Birim</th>
                   <th>Varyant</th>
+                  <th>Kritik Seviye</th>
                   <th>İşlem</th>
                 </tr>
               </thead>
@@ -375,6 +399,7 @@ export default function ProductManagement() {
                     <td>{p.category || '-'}</td>
                     <td>{p.baseUnit}</td>
                     <td>{p.variant ? `${p.variant.color || ''} ${p.variant.size || ''}`.trim() || '-' : '-'}</td>
+                    <td>{p.criticalLevel ? p.criticalLevel : '-'}</td>
                     <td style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '12px' }} onClick={() => handleEdit(p)}>
                         <Edit size={14} /> Düzenle

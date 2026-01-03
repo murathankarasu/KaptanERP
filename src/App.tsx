@@ -41,6 +41,12 @@ import Signup from './pages/Signup';
 import InviteAdmin from './pages/InviteAdmin';
 import About from './pages/About';
 import AIAssistantPage from './pages/AIAssistant';
+import AIChat from './pages/ai-tools/AIChat';
+import StockAnalysis from './pages/ai-tools/StockAnalysis';
+import DailyReport from './pages/ai-tools/DailyReport';
+import AnomalyDetection from './pages/ai-tools/AnomalyDetection';
+import FinancialInsights from './pages/ai-tools/FinancialInsights';
+import Predictions from './pages/ai-tools/Predictions';
 import BarcodeScanner from './pages/BarcodeScanner';
 
 function App() {
@@ -233,6 +239,30 @@ function App() {
         <Route 
           path="/ai-assistant" 
           element={isAuthenticated() ? <AIAssistantPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/chat" 
+          element={isAuthenticated() ? <AIChat /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/stock-analysis" 
+          element={isAuthenticated() ? <StockAnalysis /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/daily-report" 
+          element={isAuthenticated() ? <DailyReport /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/anomaly-detection" 
+          element={isAuthenticated() ? <AnomalyDetection /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/financial-insights" 
+          element={isAuthenticated() ? <FinancialInsights /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/ai-tools/predictions" 
+          element={isAuthenticated() ? <Predictions /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/sales-invoices" 
